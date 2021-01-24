@@ -1,0 +1,5 @@
+mmcc2 - C compiler written in Rust
+
+$ git clone https://github.com/matsuyoshi30/mmcc2
+$ docker build -t mmcc2 .
+$ ./docker-run

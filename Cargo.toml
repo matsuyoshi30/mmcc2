@@ -1,0 +1,7 @@
+[package]
+name = "mmcc2"
+version = "0.1.0"
+authors = ["matsuyoshi <sfbgwm30@gmail.com>"]
+edition = "2018"
+
+[dependencies]
