@@ -24,5 +24,6 @@ assert 6 3+3
 assert 3 4-1
 assert 4 5+1-2
 assert 5 4-2+3
+assert 10 ' 12 - 2 '
 
 echo OK
