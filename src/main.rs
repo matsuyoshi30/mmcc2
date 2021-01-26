@@ -18,7 +18,7 @@ enum TokenKind {
 struct Token {
     kind: TokenKind,
     val: u32,
-    op: String,
+    op: char,
 }
 
 fn tokenize(s: String) -> Vec<Token> {
@@ -34,7 +34,7 @@ fn tokenize(s: String) -> Vec<Token> {
         if c == '+' || c == '-' {
             let token = Token {
                 kind: TokenKind::TkReserved,
-                op: c.to_string(),
+                op: c,
                 val: 0,
             };
             tokens.push(token);
@@ -47,7 +47,7 @@ fn tokenize(s: String) -> Vec<Token> {
             let token = Token {
                 kind: TokenKind::TkNum,
                 val: n.parse().unwrap(),
-                op: "".to_string(),
+                op: ' ',
             };
             tokens.push(token);
             expr = r;
@@ -57,10 +57,103 @@ fn tokenize(s: String) -> Vec<Token> {
     tokens.push(Token {
         kind: TokenKind::TkEof,
         val: 0,
-        op: "".to_string(),
+        op: ' ',
     });
 
     tokens
+}
+
+#[derive(PartialEq)]
+enum NodeKind {
+    NdAdd,
+    NdSub,
+    NdNum,
+}
+
+struct Node {
+    kind: NodeKind,
+    lhs: Option<Box<Node>>,
+    rhs: Option<Box<Node>>,
+    val: u32,
+}
+
+fn expr(tokens: Vec<Token>) -> Node {
+    let mut pos = 0;
+    let mut lhs = Node {
+        kind: NodeKind::NdNum,
+        lhs: None,
+        rhs: None,
+        val: tokens[pos].val,
+    };
+
+    pos += 1;
+    loop {
+        match tokens[pos].op {
+            '+' => {
+                pos += 1;
+                lhs = Node {
+                    kind: NodeKind::NdAdd,
+                    lhs: Some(Box::new(lhs)),
+                    rhs: Some(Box::new(Node {
+                        kind: NodeKind::NdNum,
+                        lhs: None,
+                        rhs: None,
+                        val: tokens[pos].val,
+                    })),
+                    val: 0,
+                };
+                pos += 1;
+            }
+            '-' => {
+                pos += 1;
+                lhs = Node {
+                    kind: NodeKind::NdSub,
+                    lhs: Some(Box::new(lhs)),
+                    rhs: Some(Box::new(Node {
+                        kind: NodeKind::NdNum,
+                        lhs: None,
+                        rhs: None,
+                        val: tokens[pos].val,
+                    })),
+                    val: 0,
+                };
+                pos += 1;
+            }
+            _ => {
+                break;
+            }
+        }
+    }
+
+    lhs
+}
+
+fn gen(node: Box<Node>) {
+    if node.kind == NodeKind::NdNum {
+        println!("  push {}", node.val);
+        return;
+    }
+
+    gen(node.lhs.unwrap());
+    gen(node.rhs.unwrap());
+
+    println!("  pop rdi");
+    println!("  pop rax");
+
+    match node.kind {
+        NodeKind::NdAdd => {
+            println!("  add rax, rdi");
+        }
+        NodeKind::NdSub => {
+            println!("  sub rax, rdi");
+        }
+        _ => {
+            eprintln!("unknown node");
+            process::exit(1);
+        }
+    }
+
+    println!("  push rax");
 }
 
 fn main() {
@@ -71,45 +164,15 @@ fn main() {
     }
 
     let input = &args[1];
-    let mut tokens = tokenize(input.to_string());
-
-    if tokens[0].kind != TokenKind::TkNum {
-        eprintln!("input should be started as number");
-        process::exit(1);
-    }
+    let tokens = tokenize(input.to_string());
+    let node = expr(tokens);
 
     println!(".intel_syntax noprefix");
     println!(".global main");
     println!("main:");
 
-    println!("  mov rax, {}", tokens[0].val);
-    tokens = tokens.split_off(1);
+    gen(Box::new(node));
 
-    let mut i = 0;
-    while i != tokens.len() {
-        match tokens[i] {
-            Token {
-                kind: TokenKind::TkReserved,
-                ..
-            } => {
-                if tokens[i].op == '+'.to_string() {
-                    println!("  add rax, {}", tokens[i + 1].val);
-                } else {
-                    println!("  sub rax, {}", tokens[i + 1].val);
-                }
-                i += 2;
-                continue;
-            }
-            Token {
-                kind: TokenKind::TkEof,
-                ..
-            } => break,
-            _ => {
-                eprintln!("unexpected character: {}", tokens[i].op);
-                process::exit(1);
-            }
-        }
-    }
-
+    println!("  pop rax");
     println!("  ret");
 }
