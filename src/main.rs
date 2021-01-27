@@ -31,7 +31,7 @@ fn tokenize(s: String) -> Vec<Token> {
             continue;
         }
 
-        if c == '+' || c == '-' {
+        if c == '+' || c == '-' || c == '*' || c == '/' {
             let token = Token {
                 kind: TokenKind::TkReserved,
                 op: c,
@@ -67,6 +67,8 @@ fn tokenize(s: String) -> Vec<Token> {
 enum NodeKind {
     NdAdd,
     NdSub,
+    NdMul,
+    NdDiv,
     NdNum,
 }
 
@@ -77,8 +79,7 @@ struct Node {
     val: u32,
 }
 
-fn expr(tokens: Vec<Token>) -> Node {
-    let mut pos = 0;
+fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     let mut lhs = Node {
         kind: NodeKind::NdNum,
         lhs: None,
@@ -89,10 +90,10 @@ fn expr(tokens: Vec<Token>) -> Node {
     pos += 1;
     loop {
         match tokens[pos].op {
-            '+' => {
+            '*' => {
                 pos += 1;
                 lhs = Node {
-                    kind: NodeKind::NdAdd,
+                    kind: NodeKind::NdMul,
                     lhs: Some(Box::new(lhs)),
                     rhs: Some(Box::new(Node {
                         kind: NodeKind::NdNum,
@@ -104,10 +105,10 @@ fn expr(tokens: Vec<Token>) -> Node {
                 };
                 pos += 1;
             }
-            '-' => {
+            '/' => {
                 pos += 1;
                 lhs = Node {
-                    kind: NodeKind::NdSub,
+                    kind: NodeKind::NdDiv,
                     lhs: Some(Box::new(lhs)),
                     rhs: Some(Box::new(Node {
                         kind: NodeKind::NdNum,
@@ -118,6 +119,44 @@ fn expr(tokens: Vec<Token>) -> Node {
                     val: 0,
                 };
                 pos += 1;
+            }
+            _ => {
+                break;
+            }
+        }
+    }
+
+    (lhs, pos)
+}
+
+fn expr(tokens: &Vec<Token>) -> Node {
+    let mut pos = 0;
+    let (mut lhs, _) = mul(tokens, 0);
+
+    pos += 1;
+    loop {
+        match tokens[pos].op {
+            '+' => {
+                pos += 1;
+                let (rhs, npos) = mul(&tokens, pos);
+                lhs = Node {
+                    kind: NodeKind::NdAdd,
+                    lhs: Some(Box::new(lhs)),
+                    rhs: Some(Box::new(rhs)),
+                    val: 0,
+                };
+                pos = npos;
+            }
+            '-' => {
+                pos += 1;
+                let (rhs, npos) = mul(&tokens, pos);
+                lhs = Node {
+                    kind: NodeKind::NdSub,
+                    lhs: Some(Box::new(lhs)),
+                    rhs: Some(Box::new(rhs)),
+                    val: 0,
+                };
+                pos = npos;
             }
             _ => {
                 break;
@@ -147,6 +186,13 @@ fn gen(node: Box<Node>) {
         NodeKind::NdSub => {
             println!("  sub rax, rdi");
         }
+        NodeKind::NdMul => {
+            println!("  imul rax, rdi");
+        }
+        NodeKind::NdDiv => {
+            println!("  cqo");
+            println!("  idiv rdi");
+        }
         _ => {
             eprintln!("unknown node");
             process::exit(1);
@@ -165,7 +211,7 @@ fn main() {
 
     let input = &args[1];
     let tokens = tokenize(input.to_string());
-    let node = expr(tokens);
+    let node = expr(&tokens);
 
     println!(".intel_syntax noprefix");
     println!(".global main");
