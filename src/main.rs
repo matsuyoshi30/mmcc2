@@ -21,6 +21,16 @@ struct Token {
     op: char,
 }
 
+impl Default for Token {
+    fn default() -> Self {
+        Self {
+            kind: TokenKind::TkEof,
+            val: 0,
+            op: ' ',
+        }
+    }
+}
+
 fn tokenize(s: String) -> Vec<Token> {
     let mut tokens: Vec<Token> = vec![];
 
@@ -35,7 +45,7 @@ fn tokenize(s: String) -> Vec<Token> {
             let token = Token {
                 kind: TokenKind::TkReserved,
                 op: c,
-                val: 0,
+                ..Default::default()
             };
             tokens.push(token);
             expr = expr.split_off(1);
@@ -47,18 +57,14 @@ fn tokenize(s: String) -> Vec<Token> {
             let token = Token {
                 kind: TokenKind::TkNum,
                 val: n.parse().unwrap(),
-                op: ' ',
+                ..Default::default()
             };
             tokens.push(token);
             expr = r;
             continue;
         }
     }
-    tokens.push(Token {
-        kind: TokenKind::TkEof,
-        val: 0,
-        op: ' ',
-    });
+    tokens.push(Default::default());
 
     tokens
 }
@@ -79,6 +85,17 @@ struct Node {
     val: u32,
 }
 
+impl Default for Node {
+    fn default() -> Self {
+        Self {
+            kind: NodeKind::NdNum,
+            lhs: None,
+            rhs: None,
+            val: 0,
+        }
+    }
+}
+
 fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     if tokens[pos].op == '(' {
         pos += 1;
@@ -95,10 +112,8 @@ fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     pos += 1;
     (
         Node {
-            kind: NodeKind::NdNum,
-            lhs: None,
-            rhs: None,
             val: tokens[pos - 1].val,
+            ..Node::default()
         },
         pos,
     )
@@ -117,7 +132,7 @@ fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
                     kind: NodeKind::NdMul,
                     lhs: Some(Box::new(lhs)),
                     rhs: Some(Box::new(rhs)),
-                    val: 0,
+                    ..Default::default()
                 };
                 pos = npos;
             }
@@ -128,7 +143,7 @@ fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
                     kind: NodeKind::NdDiv,
                     lhs: Some(Box::new(lhs)),
                     rhs: Some(Box::new(rhs)),
-                    val: 0,
+                    ..Default::default()
                 };
                 pos = npos;
             }
@@ -154,7 +169,7 @@ fn expr(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
                     kind: NodeKind::NdAdd,
                     lhs: Some(Box::new(lhs)),
                     rhs: Some(Box::new(rhs)),
-                    val: 0,
+                    ..Default::default()
                 };
                 pos = npos;
             }
@@ -165,7 +180,7 @@ fn expr(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
                     kind: NodeKind::NdSub,
                     lhs: Some(Box::new(lhs)),
                     rhs: Some(Box::new(rhs)),
-                    val: 0,
+                    ..Default::default()
                 };
                 pos = npos;
             }
