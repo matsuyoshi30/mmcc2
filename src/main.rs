@@ -119,15 +119,40 @@ fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     )
 }
 
+fn unary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
+    if tokens[pos].op == '+' {
+        pos += 1;
+        return unary(&tokens, pos);
+    }
+    if tokens[pos].op == '-' {
+        pos += 1;
+        let (rhs, npos) = unary(&tokens, pos);
+        return (
+            Node {
+                kind: NodeKind::NdSub,
+                lhs: Some(Box::new(Node {
+                    val: 0,
+                    ..Default::default()
+                })),
+                rhs: Some(Box::new(rhs)),
+                ..Default::default()
+            },
+            npos,
+        );
+    }
+
+    primary(&tokens, pos)
+}
+
 fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
-    let (mut lhs, npos) = primary(&tokens, pos);
+    let (mut lhs, npos) = unary(&tokens, pos);
 
     pos = npos;
     loop {
         match tokens[pos].op {
             '*' => {
                 pos += 1;
-                let (rhs, npos) = primary(&tokens, pos);
+                let (rhs, npos) = unary(&tokens, pos);
                 lhs = Node {
                     kind: NodeKind::NdMul,
                     lhs: Some(Box::new(lhs)),
@@ -138,7 +163,7 @@ fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
             }
             '/' => {
                 pos += 1;
-                let (rhs, npos) = primary(&tokens, pos);
+                let (rhs, npos) = unary(&tokens, pos);
                 lhs = Node {
                     kind: NodeKind::NdDiv,
                     lhs: Some(Box::new(lhs)),
