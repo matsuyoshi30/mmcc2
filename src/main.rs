@@ -157,9 +157,9 @@ fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
 }
 
 fn expr(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
-    let (mut lhs, _) = mul(tokens, pos);
+    let (mut lhs, npos) = mul(tokens, pos);
 
-    pos += 1;
+    pos = npos;
     loop {
         match tokens[pos].op {
             '+' => {
