@@ -41,6 +41,17 @@ fn tokenize(s: String) -> Vec<Token> {
             continue;
         }
 
+        if c == '>' || c == '<' {
+            let token = Token {
+                kind: TokenKind::TkReserved,
+                op: c,
+                ..Default::default()
+            };
+            tokens.push(token);
+            expr = expr.split_off(1);
+            continue;
+        }
+
         if c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' {
             let token = Token {
                 kind: TokenKind::TkReserved,
@@ -76,6 +87,8 @@ enum NodeKind {
     NdMul,
     NdDiv,
     NdNum,
+    NdMt, // more than >
+    NdLt, // less than <
 }
 
 struct Node {
@@ -181,7 +194,7 @@ fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     (lhs, pos)
 }
 
-fn expr(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
+fn add(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     let (mut lhs, npos) = mul(tokens, pos);
 
     pos = npos;
@@ -218,6 +231,47 @@ fn expr(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     (lhs, pos)
 }
 
+fn relational(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
+    let (mut lhs, npos) = add(tokens, pos);
+
+    pos = npos;
+    loop {
+        match tokens[pos].op {
+            '>' => {
+                pos += 1;
+                let (rhs, npos) = add(&tokens, pos);
+                lhs = Node {
+                    kind: NodeKind::NdMt,
+                    lhs: Some(Box::new(lhs)),
+                    rhs: Some(Box::new(rhs)),
+                    ..Default::default()
+                };
+                pos = npos;
+            }
+            '<' => {
+                pos += 1;
+                let (rhs, npos) = add(&tokens, pos);
+                lhs = Node {
+                    kind: NodeKind::NdLt,
+                    lhs: Some(Box::new(lhs)),
+                    rhs: Some(Box::new(rhs)),
+                    ..Default::default()
+                };
+                pos = npos;
+            }
+            _ => {
+                break;
+            }
+        }
+    }
+
+    (lhs, pos)
+}
+
+fn expr(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+    return relational(&tokens, pos);
+}
+
 fn gen(node: Box<Node>) {
     if node.kind == NodeKind::NdNum {
         println!("  push {}", node.val);
@@ -243,6 +297,16 @@ fn gen(node: Box<Node>) {
         NodeKind::NdDiv => {
             println!("  cqo");
             println!("  idiv rdi");
+        }
+        NodeKind::NdMt => {
+            println!("  cmp rdi, rax");
+            println!("  setl al");
+            println!("  movzb rax, al");
+        }
+        NodeKind::NdLt => {
+            println!("  cmp rax, rdi");
+            println!("  setle al");
+            println!("  movzb rax, al");
         }
         _ => {
             eprintln!("unknown node");

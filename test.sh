@@ -32,5 +32,7 @@ assert 4 '(3+5)/2'
 assert 10 '-10+20'
 assert 15 '-3*-5'
 assert 20 '- - +20'
+assert 1 '5>3'
+assert 0 '5<3'
 
 echo OK
