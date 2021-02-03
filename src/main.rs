@@ -105,167 +105,169 @@ struct Node {
     val: u32,
 }
 
-fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
-    if tokens[pos].op == '(' {
-        pos += 1;
-        let (node, npos) = expr(&tokens, pos);
-        pos = npos;
-        if tokens[pos].op != ')' {
-            eprintln!("unexpected token: {}", tokens[pos].op);
-            process::exit(1);
+impl Node {
+    fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Self, usize) {
+        if tokens[pos].op == '(' {
+            pos += 1;
+            let (node, npos) = Self::expr(&tokens, pos);
+            pos = npos;
+            if tokens[pos].op != ')' {
+                eprintln!("unexpected token: {}", tokens[pos].op);
+                process::exit(1);
+            }
+            pos += 1;
+            return (node, pos);
         }
-        pos += 1;
-        return (node, pos);
-    }
 
-    pos += 1;
-    (
-        Node {
-            val: tokens[pos - 1].val,
-            ..Node::default()
-        },
-        pos,
-    )
-}
-
-fn unary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
-    if tokens[pos].op == '+' {
         pos += 1;
-        return unary(&tokens, pos);
-    }
-    if tokens[pos].op == '-' {
-        pos += 1;
-        let (rhs, npos) = unary(&tokens, pos);
-        return (
-            Node {
-                kind: NodeKind::NdSub,
-                lhs: Some(Box::new(Node {
-                    val: 0,
-                    ..Default::default()
-                })),
-                rhs: Some(Box::new(rhs)),
+        (
+            Self {
+                val: tokens[pos - 1].val,
                 ..Default::default()
             },
-            npos,
-        );
+            pos,
+        )
     }
 
-    primary(&tokens, pos)
-}
-
-fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
-    let (mut lhs, npos) = unary(&tokens, pos);
-
-    pos = npos;
-    loop {
-        match tokens[pos].op {
-            '*' => {
-                pos += 1;
-                let (rhs, npos) = unary(&tokens, pos);
-                lhs = Node {
-                    kind: NodeKind::NdMul,
-                    lhs: Some(Box::new(lhs)),
-                    rhs: Some(Box::new(rhs)),
-                    ..Default::default()
-                };
-                pos = npos;
-            }
-            '/' => {
-                pos += 1;
-                let (rhs, npos) = unary(&tokens, pos);
-                lhs = Node {
-                    kind: NodeKind::NdDiv,
-                    lhs: Some(Box::new(lhs)),
-                    rhs: Some(Box::new(rhs)),
-                    ..Default::default()
-                };
-                pos = npos;
-            }
-            _ => {
-                break;
-            }
+    fn unary(tokens: &Vec<Token>, mut pos: usize) -> (Self, usize) {
+        if tokens[pos].op == '+' {
+            pos += 1;
+            return Self::unary(&tokens, pos);
         }
-    }
-
-    (lhs, pos)
-}
-
-fn add(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
-    let (mut lhs, npos) = mul(tokens, pos);
-
-    pos = npos;
-    loop {
-        match tokens[pos].op {
-            '+' => {
-                pos += 1;
-                let (rhs, npos) = mul(&tokens, pos);
-                lhs = Node {
-                    kind: NodeKind::NdAdd,
-                    lhs: Some(Box::new(lhs)),
-                    rhs: Some(Box::new(rhs)),
-                    ..Default::default()
-                };
-                pos = npos;
-            }
-            '-' => {
-                pos += 1;
-                let (rhs, npos) = mul(&tokens, pos);
-                lhs = Node {
+        if tokens[pos].op == '-' {
+            pos += 1;
+            let (rhs, npos) = Self::unary(&tokens, pos);
+            return (
+                Self {
                     kind: NodeKind::NdSub,
-                    lhs: Some(Box::new(lhs)),
+                    lhs: Some(Box::new(Self {
+                        val: 0,
+                        ..Default::default()
+                    })),
                     rhs: Some(Box::new(rhs)),
                     ..Default::default()
-                };
-                pos = npos;
-            }
-            _ => {
-                break;
-            }
+                },
+                npos,
+            );
         }
+
+        Self::primary(&tokens, pos)
     }
 
-    (lhs, pos)
-}
+    fn mul(tokens: &Vec<Token>, mut pos: usize) -> (Self, usize) {
+        let (mut lhs, npos) = Self::unary(&tokens, pos);
 
-fn relational(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
-    let (mut lhs, npos) = add(tokens, pos);
-
-    pos = npos;
-    loop {
-        match tokens[pos].op {
-            '>' => {
-                pos += 1;
-                let (rhs, npos) = add(&tokens, pos);
-                lhs = Node {
-                    kind: NodeKind::NdMt,
-                    lhs: Some(Box::new(lhs)),
-                    rhs: Some(Box::new(rhs)),
-                    ..Default::default()
-                };
-                pos = npos;
-            }
-            '<' => {
-                pos += 1;
-                let (rhs, npos) = add(&tokens, pos);
-                lhs = Node {
-                    kind: NodeKind::NdLt,
-                    lhs: Some(Box::new(lhs)),
-                    rhs: Some(Box::new(rhs)),
-                    ..Default::default()
-                };
-                pos = npos;
-            }
-            _ => {
-                break;
+        pos = npos;
+        loop {
+            match tokens[pos].op {
+                '*' => {
+                    pos += 1;
+                    let (rhs, npos) = Self::unary(&tokens, pos);
+                    lhs = Self {
+                        kind: NodeKind::NdMul,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
+                        ..Default::default()
+                    };
+                    pos = npos;
+                }
+                '/' => {
+                    pos += 1;
+                    let (rhs, npos) = Self::unary(&tokens, pos);
+                    lhs = Self {
+                        kind: NodeKind::NdDiv,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
+                        ..Default::default()
+                    };
+                    pos = npos;
+                }
+                _ => {
+                    break;
+                }
             }
         }
+
+        (lhs, pos)
     }
 
-    (lhs, pos)
-}
+    fn add(tokens: &Vec<Token>, mut pos: usize) -> (Self, usize) {
+        let (mut lhs, npos) = Self::mul(tokens, pos);
 
-fn expr(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
-    return relational(&tokens, pos);
+        pos = npos;
+        loop {
+            match tokens[pos].op {
+                '+' => {
+                    pos += 1;
+                    let (rhs, npos) = Self::mul(&tokens, pos);
+                    lhs = Self {
+                        kind: NodeKind::NdAdd,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
+                        ..Default::default()
+                    };
+                    pos = npos;
+                }
+                '-' => {
+                    pos += 1;
+                    let (rhs, npos) = Self::mul(&tokens, pos);
+                    lhs = Self {
+                        kind: NodeKind::NdSub,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
+                        ..Default::default()
+                    };
+                    pos = npos;
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        (lhs, pos)
+    }
+
+    fn relational(tokens: &Vec<Token>, mut pos: usize) -> (Self, usize) {
+        let (mut lhs, npos) = Self::add(tokens, pos);
+
+        pos = npos;
+        loop {
+            match tokens[pos].op {
+                '>' => {
+                    pos += 1;
+                    let (rhs, npos) = Self::add(&tokens, pos);
+                    lhs = Self {
+                        kind: NodeKind::NdMt,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
+                        ..Default::default()
+                    };
+                    pos = npos;
+                }
+                '<' => {
+                    pos += 1;
+                    let (rhs, npos) = Self::add(&tokens, pos);
+                    lhs = Self {
+                        kind: NodeKind::NdLt,
+                        lhs: Some(Box::new(lhs)),
+                        rhs: Some(Box::new(rhs)),
+                        ..Default::default()
+                    };
+                    pos = npos;
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        (lhs, pos)
+    }
+
+    fn expr(tokens: &Vec<Token>, pos: usize) -> (Self, usize) {
+        return Self::relational(&tokens, pos);
+    }
 }
 
 fn gen(node: Box<Node>) {
@@ -322,7 +324,7 @@ fn main() {
 
     let input = &args[1];
     let tokens = tokenize(input.to_string());
-    let (node, _) = expr(&tokens, 0);
+    let (node, _) = Node::expr(&tokens, 0);
 
     println!(".intel_syntax noprefix");
     println!(".global main");
