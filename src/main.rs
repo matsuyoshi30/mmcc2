@@ -105,6 +105,24 @@ struct Node {
     val: u32,
 }
 
+impl Node {
+    fn new_node(kind: NodeKind, lhs: Box<Node>, rhs: Box<Node>) -> Self {
+        Self {
+            kind: kind,
+            lhs: Some(lhs),
+            rhs: Some(rhs),
+            ..Default::default()
+        }
+    }
+
+    fn new_node_num(val: u32) -> Self {
+        Self {
+            val: val,
+            ..Default::default()
+        }
+    }
+}
+
 struct Parser<'a> {
     tokens: &'a Vec<Token>,
     pos: usize,
@@ -124,10 +142,7 @@ impl<'a> Parser<'a> {
         }
 
         self.pos += 1;
-        Node {
-            val: self.tokens[self.pos - 1].val,
-            ..Default::default()
-        }
+        Node::new_node_num(self.tokens[self.pos - 1].val)
     }
 
     fn unary(&mut self) -> Node {
@@ -137,16 +152,11 @@ impl<'a> Parser<'a> {
         }
         if self.tokens[self.pos].op == '-' {
             self.pos += 1;
-            let rhs = self.unary();
-            return Node {
-                kind: NodeKind::NdSub,
-                lhs: Some(Box::new(Node {
-                    val: 0,
-                    ..Default::default()
-                })),
-                rhs: Some(Box::new(rhs)),
-                ..Default::default()
-            };
+            return Node::new_node(
+                NodeKind::NdSub,
+                Box::new(Node::new_node_num(0)),
+                Box::new(self.unary()),
+            );
         }
 
         self.primary()
@@ -159,23 +169,11 @@ impl<'a> Parser<'a> {
             match self.tokens[self.pos].op {
                 '*' => {
                     self.pos += 1;
-                    let rhs = self.unary();
-                    lhs = Node {
-                        kind: NodeKind::NdMul,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
-                        ..Default::default()
-                    }
+                    lhs = Node::new_node(NodeKind::NdMul, Box::new(lhs), Box::new(self.unary()));
                 }
                 '/' => {
                     self.pos += 1;
-                    let rhs = self.unary();
-                    lhs = Node {
-                        kind: NodeKind::NdDiv,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
-                        ..Default::default()
-                    };
+                    lhs = Node::new_node(NodeKind::NdDiv, Box::new(lhs), Box::new(self.unary()));
                 }
                 _ => {
                     break;
@@ -193,23 +191,11 @@ impl<'a> Parser<'a> {
             match self.tokens[self.pos].op {
                 '+' => {
                     self.pos += 1;
-                    let rhs = self.mul();
-                    lhs = Node {
-                        kind: NodeKind::NdAdd,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
-                        ..Default::default()
-                    };
+                    lhs = Node::new_node(NodeKind::NdAdd, Box::new(lhs), Box::new(self.mul()));
                 }
                 '-' => {
                     self.pos += 1;
-                    let rhs = self.mul();
-                    lhs = Node {
-                        kind: NodeKind::NdSub,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
-                        ..Default::default()
-                    };
+                    lhs = Node::new_node(NodeKind::NdSub, Box::new(lhs), Box::new(self.mul()));
                 }
                 _ => {
                     break;
@@ -227,23 +213,11 @@ impl<'a> Parser<'a> {
             match self.tokens[self.pos].op {
                 '>' => {
                     self.pos += 1;
-                    let rhs = self.add();
-                    lhs = Node {
-                        kind: NodeKind::NdMt,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
-                        ..Default::default()
-                    };
+                    lhs = Node::new_node(NodeKind::NdMt, Box::new(lhs), Box::new(self.add()));
                 }
                 '<' => {
                     self.pos += 1;
-                    let rhs = self.add();
-                    lhs = Node {
-                        kind: NodeKind::NdLt,
-                        lhs: Some(Box::new(lhs)),
-                        rhs: Some(Box::new(rhs)),
-                        ..Default::default()
-                    };
+                    lhs = Node::new_node(NodeKind::NdLt, Box::new(lhs), Box::new(self.add()));
                 }
                 _ => {
                     break;
