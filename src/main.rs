@@ -91,22 +91,18 @@ enum NodeKind {
     NdLt, // less than <
 }
 
+impl Default for NodeKind {
+    fn default() -> Self {
+        NodeKind::NdNum
+    }
+}
+
+#[derive(Default)]
 struct Node {
     kind: NodeKind,
     lhs: Option<Box<Node>>,
     rhs: Option<Box<Node>>,
     val: u32,
-}
-
-impl Default for Node {
-    fn default() -> Self {
-        Self {
-            kind: NodeKind::NdNum,
-            lhs: None,
-            rhs: None,
-            val: 0,
-        }
-    }
 }
 
 fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
