@@ -15,18 +15,32 @@ enum TokenKind {
     TkEof,
 }
 
+impl Default for TokenKind {
+    fn default() -> Self {
+        TokenKind::TkNum
+    }
+}
+
+#[derive(Default)]
 struct Token {
     kind: TokenKind,
     val: u32,
     op: char,
 }
 
-impl Default for Token {
-    fn default() -> Self {
+impl Token {
+    fn new_token(kind: TokenKind, op: char) -> Self {
         Self {
-            kind: TokenKind::TkEof,
-            val: 0,
-            op: ' ',
+            kind: kind,
+            op: op,
+            ..Default::default()
+        }
+    }
+
+    fn new_token_num(val: u32) -> Self {
+        Self {
+            val: val,
+            ..Default::default()
         }
     }
 }
@@ -42,22 +56,14 @@ fn tokenize(s: String) -> Vec<Token> {
         }
 
         if c == '>' || c == '<' {
-            let token = Token {
-                kind: TokenKind::TkReserved,
-                op: c,
-                ..Default::default()
-            };
+            let token = Token::new_token(TokenKind::TkReserved, c);
             tokens.push(token);
             expr = expr.split_off(1);
             continue;
         }
 
         if c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' {
-            let token = Token {
-                kind: TokenKind::TkReserved,
-                op: c,
-                ..Default::default()
-            };
+            let token = Token::new_token(TokenKind::TkReserved, c);
             tokens.push(token);
             expr = expr.split_off(1);
             continue;
@@ -65,17 +71,13 @@ fn tokenize(s: String) -> Vec<Token> {
 
         if c.is_digit(10) {
             let (n, r) = strtol(&expr);
-            let token = Token {
-                kind: TokenKind::TkNum,
-                val: n.parse().unwrap(),
-                ..Default::default()
-            };
+            let token = Token::new_token_num(n.parse().unwrap());
             tokens.push(token);
             expr = r;
             continue;
         }
     }
-    tokens.push(Default::default());
+    tokens.push(Token::new_token(TokenKind::TkEof, ' '));
 
     tokens
 }
