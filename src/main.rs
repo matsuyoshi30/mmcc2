@@ -67,6 +67,18 @@ fn tokenize(s: String) -> Vec<Token> {
             continue;
         }
 
+        if c == '=' || c == '!' {
+            if expr.chars().nth(1).unwrap() == '=' {
+                let v = expr.split_off(2);
+                tokens.push(Token::new_token(TokenKind::TkReserved, expr));
+                expr = v;
+                continue;
+            } else {
+                eprintln!("unable tokenize");
+                process::exit(1);
+            }
+        }
+
         if c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' {
             tokens.push(Token::new_token(TokenKind::TkReserved, c.to_string()));
             expr = expr.split_off(1);
@@ -97,6 +109,8 @@ enum NodeKind {
     NdLt, // less than <
     NdOm, // or more >=
     NdOl, // or less <=
+    NdEq, // equal
+    NdNe, // not equal
 }
 
 impl Default for NodeKind {
@@ -244,8 +258,30 @@ impl<'a> Parser<'a> {
         lhs
     }
 
+    fn equality(&mut self) -> Node {
+        let mut lhs = self.relational();
+
+        loop {
+            match self.tokens[self.pos].op.as_str() {
+                "==" => {
+                    self.pos += 1;
+                    lhs = Node::new_node(NodeKind::NdEq, Box::new(lhs), Box::new(self.mul()));
+                }
+                "!=" => {
+                    self.pos += 1;
+                    lhs = Node::new_node(NodeKind::NdNe, Box::new(lhs), Box::new(self.mul()));
+                }
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        lhs
+    }
+
     fn expr(&mut self) -> Node {
-        return self.relational();
+        return self.equality();
     }
 
     fn new(tokens: &'a Vec<Token>) -> Self {
@@ -300,6 +336,16 @@ fn gen(node: Box<Node>) {
         NodeKind::NdOl => {
             println!("  cmp rax, rdi");
             println!("  setle al");
+            println!("  movzb rax, al");
+        }
+        NodeKind::NdEq => {
+            println!("  cmp rax, rdi");
+            println!("  sete al");
+            println!("  movzb rax, al");
+        }
+        NodeKind::NdNe => {
+            println!("  cmp rax, rdi");
+            println!("  setne al");
             println!("  movzb rax, al");
         }
         _ => {

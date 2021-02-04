@@ -40,5 +40,9 @@ assert 0 '6>=9'
 assert 1 '9>=6'
 assert 0 '9<=6'
 assert 1 '6<=9'
+assert 0 '2==3'
+assert 1 '3==3'
+assert 1 '2!=3'
+assert 0 '3!=3'
 
 echo OK
