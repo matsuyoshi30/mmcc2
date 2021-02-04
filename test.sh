@@ -33,8 +33,12 @@ assert 10 '-10+20'
 assert 15 '-3*-5'
 assert 20 '- - +20'
 assert 1 '5>3'
-assert 0 '5<3'
+assert 0 '5>5'
+assert 1 '3<5'
+assert 0 '3<3'
 assert 0 '6>=9'
+assert 1 '9>=6'
+assert 0 '9<=6'
 assert 1 '6<=9'
 
 echo OK

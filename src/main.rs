@@ -289,7 +289,7 @@ fn gen(node: Box<Node>) {
         }
         NodeKind::NdLt => {
             println!("  cmp rax, rdi");
-            println!("  setle al");
+            println!("  setl al");
             println!("  movzb rax, al");
         }
         NodeKind::NdOm => {
