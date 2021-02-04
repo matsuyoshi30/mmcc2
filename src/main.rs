@@ -25,11 +25,11 @@ impl Default for TokenKind {
 struct Token {
     kind: TokenKind,
     val: u32,
-    op: char,
+    op: String,
 }
 
 impl Token {
-    fn new_token(kind: TokenKind, op: char) -> Self {
+    fn new_token(kind: TokenKind, op: String) -> Self {
         Self {
             kind: kind,
             op: op,
@@ -56,15 +56,19 @@ fn tokenize(s: String) -> Vec<Token> {
         }
 
         if c == '>' || c == '<' {
-            let token = Token::new_token(TokenKind::TkReserved, c);
-            tokens.push(token);
+            if expr.chars().nth(1).unwrap() == '=' {
+                let v = expr.split_off(2);
+                tokens.push(Token::new_token(TokenKind::TkReserved, expr));
+                expr = v;
+                continue;
+            }
+            tokens.push(Token::new_token(TokenKind::TkReserved, c.to_string()));
             expr = expr.split_off(1);
             continue;
         }
 
         if c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' {
-            let token = Token::new_token(TokenKind::TkReserved, c);
-            tokens.push(token);
+            tokens.push(Token::new_token(TokenKind::TkReserved, c.to_string()));
             expr = expr.split_off(1);
             continue;
         }
@@ -77,7 +81,7 @@ fn tokenize(s: String) -> Vec<Token> {
             continue;
         }
     }
-    tokens.push(Token::new_token(TokenKind::TkEof, ' '));
+    tokens.push(Token::new_token(TokenKind::TkEof, " ".to_string()));
 
     tokens
 }
@@ -91,6 +95,8 @@ enum NodeKind {
     NdNum,
     NdMt, // more than >
     NdLt, // less than <
+    NdOm, // or more >=
+    NdOl, // or less <=
 }
 
 impl Default for NodeKind {
@@ -132,10 +138,10 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     fn primary(&mut self) -> Node {
-        if self.tokens[self.pos].op == '(' {
+        if self.tokens[self.pos].op == "(" {
             self.pos += 1;
             let node = self.expr();
-            if self.tokens[self.pos].op != ')' {
+            if self.tokens[self.pos].op != ")" {
                 eprintln!("unexpected token: {}", self.tokens[self.pos].op);
                 process::exit(1);
             }
@@ -148,11 +154,11 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Node {
-        if self.tokens[self.pos].op == '+' {
+        if self.tokens[self.pos].op == "+" {
             self.pos += 1;
             return self.unary();
         }
-        if self.tokens[self.pos].op == '-' {
+        if self.tokens[self.pos].op == "-" {
             self.pos += 1;
             return Node::new_node(
                 NodeKind::NdSub,
@@ -168,12 +174,12 @@ impl<'a> Parser<'a> {
         let mut lhs = self.unary();
 
         loop {
-            match self.tokens[self.pos].op {
-                '*' => {
+            match self.tokens[self.pos].op.as_str() {
+                "*" => {
                     self.pos += 1;
                     lhs = Node::new_node(NodeKind::NdMul, Box::new(lhs), Box::new(self.unary()));
                 }
-                '/' => {
+                "/" => {
                     self.pos += 1;
                     lhs = Node::new_node(NodeKind::NdDiv, Box::new(lhs), Box::new(self.unary()));
                 }
@@ -190,12 +196,12 @@ impl<'a> Parser<'a> {
         let mut lhs = self.mul();
 
         loop {
-            match self.tokens[self.pos].op {
-                '+' => {
+            match self.tokens[self.pos].op.as_str() {
+                "+" => {
                     self.pos += 1;
                     lhs = Node::new_node(NodeKind::NdAdd, Box::new(lhs), Box::new(self.mul()));
                 }
-                '-' => {
+                "-" => {
                     self.pos += 1;
                     lhs = Node::new_node(NodeKind::NdSub, Box::new(lhs), Box::new(self.mul()));
                 }
@@ -212,14 +218,22 @@ impl<'a> Parser<'a> {
         let mut lhs = self.add();
 
         loop {
-            match self.tokens[self.pos].op {
-                '>' => {
+            match self.tokens[self.pos].op.as_str() {
+                ">" => {
                     self.pos += 1;
                     lhs = Node::new_node(NodeKind::NdMt, Box::new(lhs), Box::new(self.add()));
                 }
-                '<' => {
+                "<" => {
                     self.pos += 1;
                     lhs = Node::new_node(NodeKind::NdLt, Box::new(lhs), Box::new(self.add()));
+                }
+                ">=" => {
+                    self.pos += 1;
+                    lhs = Node::new_node(NodeKind::NdOm, Box::new(lhs), Box::new(self.add()));
+                }
+                "<=" => {
+                    self.pos += 1;
+                    lhs = Node::new_node(NodeKind::NdOl, Box::new(lhs), Box::new(self.add()));
                 }
                 _ => {
                     break;
@@ -274,6 +288,16 @@ fn gen(node: Box<Node>) {
             println!("  movzb rax, al");
         }
         NodeKind::NdLt => {
+            println!("  cmp rax, rdi");
+            println!("  setle al");
+            println!("  movzb rax, al");
+        }
+        NodeKind::NdOm => {
+            println!("  cmp rdi, rax");
+            println!("  setle al");
+            println!("  movzb rax, al");
+        }
+        NodeKind::NdOl => {
             println!("  cmp rax, rdi");
             println!("  setle al");
             println!("  movzb rax, al");
