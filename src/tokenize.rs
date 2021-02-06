@@ -96,7 +96,15 @@ pub fn tokenize(s: String) -> Vec<Token> {
             }
         }
 
-        if c == '+' || c == '-' || c == '*' || c == '/' || c == '(' || c == ')' {
+        if c == '+'
+            || c == '-'
+            || c == '*'
+            || c == '/'
+            || c == '('
+            || c == ')'
+            || c == '{'
+            || c == '}'
+        {
             tokens.push(Token::new_token(TokenKind::TkReserved, c.to_string()));
             expr = expr.split_off(1);
             continue;

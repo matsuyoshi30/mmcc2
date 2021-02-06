@@ -63,5 +63,7 @@ assert 10 'x=0; for (i=0; i<10; i=i+1) x=x+1; return x;'
 assert 3 'for (;;) return 3; return 5;'
 assert 55 'i=0; j=0; for (i=0; i<=10; i=i+1) j=i+j; return j;'
 assert 100 'a=0; for (i=0; i<10; i=i+1) if (i==5) a=100; return a;'
+assert 6 'if (5>3) { a=3; b=2; c=a*b; } return c;'
+assert 100 'ret=0; for (i=0; i<10; i=i+1) { j=0; while (j<10) { ret=ret+1; j=j+1; } } return ret;'
 
 echo OK

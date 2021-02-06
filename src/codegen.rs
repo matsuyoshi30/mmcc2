@@ -34,6 +34,14 @@ impl Generator {
             return;
         }
 
+        if node.kind == NodeKind::NdBlock {
+            for block in node.blocks {
+                self.gen(Box::new(block));
+                println!("  pop rax");
+            }
+            return;
+        }
+
         if node.kind == NodeKind::NdIf {
             let label = self.new_label();
             self.gen(node.cond.unwrap());

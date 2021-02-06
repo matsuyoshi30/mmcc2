@@ -20,6 +20,7 @@ pub enum NodeKind {
     NdIf,
     NdWhile,
     NdFor,
+    NdBlock,
     NdRt,
 }
 
@@ -41,6 +42,7 @@ pub struct Node {
     pub els: Option<Box<Node>>,
     pub preop: Option<Box<Node>>,
     pub postop: Option<Box<Node>>,
+    pub blocks: Vec<Node>,
 }
 
 impl Node {
@@ -265,6 +267,21 @@ impl<'a> Parser<'a> {
 
     fn stmt(&mut self) -> Node {
         let mut node;
+
+        if self.tokens[self.pos].op == "{" {
+            node = Node {
+                kind: NodeKind::NdBlock,
+                blocks: vec![],
+                ..Default::default()
+            };
+            self.pos += 1;
+            while self.tokens[self.pos].op != "}" {
+                node.blocks.push(self.stmt());
+            }
+            self.pos += 1;
+            return node;
+        }
+
         if self.tokens[self.pos].op == "return" {
             self.pos += 1;
             node = Node::new_node_return(Box::new(self.expr()));
