@@ -58,5 +58,6 @@ assert 10 'if (5>3) return 10;'
 assert 20 'if (5<3) return 10; else return 20;'
 assert 30 'foo=5; if (5<3) return 10; else if (foo==4) return 20; else return 30;'
 assert 40 'foo=5; if (5>3) if (foo==5) return 40; else return 20; else return 30;'
+assert 5 'i=1; while (i<5) i=i+1; return i;'
 
 echo OK

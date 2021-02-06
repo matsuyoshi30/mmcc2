@@ -18,6 +18,7 @@ pub enum NodeKind {
     NdAs,
     NdLv,
     NdIf,
+    NdWhile,
     NdRt,
 }
 
@@ -278,6 +279,18 @@ impl<'a> Parser<'a> {
                 self.pos += 1;
                 node.els = Some(Box::new(self.stmt()));
             }
+
+            return node;
+        } else if self.tokens[self.pos].op == "while" {
+            node = Node {
+                kind: NodeKind::NdWhile,
+                ..Default::default()
+            };
+            self.pos += 1;
+            self.expect("(");
+            node.cond = Some(Box::new(self.expr()));
+            self.expect(")");
+            node.then = Some(Box::new(self.stmt()));
 
             return node;
         } else {

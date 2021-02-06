@@ -57,6 +57,19 @@ impl Generator {
             return;
         }
 
+        if node.kind == NodeKind::NdWhile {
+            let label = self.new_label();
+            println!(".L.begin.{}:", label);
+            self.gen(node.cond.unwrap());
+            println!("  pop rax");
+            println!("  cmp rax, 0");
+            println!("  je .L.end.{}", label);
+            self.gen(node.then.unwrap());
+            println!("  jmp .L.begin.{}", label);
+            println!(".L.end.{}:", label);
+            return;
+        }
+
         if node.kind == NodeKind::NdNum {
             println!("  push {}", node.val);
             return;

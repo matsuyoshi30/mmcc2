@@ -104,7 +104,7 @@ pub fn tokenize(s: String) -> Vec<Token> {
 
         if c.is_alphabetic() || c == '_' {
             let (s, r) = strtos(&expr);
-            if s == "return" || s == "if" || s == "else" {
+            if s == "return" || s == "if" || s == "else" || s == "while" {
                 tokens.push(Token::new_token(TokenKind::TkReserved, s));
             } else {
                 tokens.push(Token::new_token(TokenKind::TkIdent, s));
