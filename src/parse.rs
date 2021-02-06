@@ -21,6 +21,7 @@ pub enum NodeKind {
     NdWhile,
     NdFor,
     NdBlock,
+    NdFunc,
     NdRt,
 }
 
@@ -43,6 +44,7 @@ pub struct Node {
     pub preop: Option<Box<Node>>,
     pub postop: Option<Box<Node>>,
     pub blocks: Vec<Node>,
+    pub funcname: String,
 }
 
 impl Node {
@@ -116,21 +118,33 @@ impl<'a> Parser<'a> {
 
         if self.tokens[self.pos].kind == TokenKind::TkIdent {
             let name = &self.tokens[self.pos].op;
-            let offset = self.find_lvar(name.to_string());
-            if offset != 0 {
+
+            self.pos += 1;
+            if self.tokens[self.pos].op == "(" {
+                let node = Node {
+                    kind: NodeKind::NdFunc,
+                    funcname: name.to_string(),
+                    ..Default::default()
+                };
                 self.pos += 1;
+                self.expect(")");
+
+                return node;
+            } else {
+                let offset = self.find_lvar(name.to_string());
+                if offset != 0 {
+                    return Node::new_node_lv(offset);
+                }
+
+                let offset = (self.locals.len() + 1) * 8;
+                let lvar = LVar {
+                    name: name.to_string(),
+                    offset: offset,
+                };
+
+                self.locals.push(lvar);
                 return Node::new_node_lv(offset);
             }
-
-            let offset = (self.locals.len() + 1) * 8;
-            let lvar = LVar {
-                name: name.to_string(),
-                offset: offset,
-            };
-
-            self.locals.push(lvar);
-            self.pos += 1;
-            return Node::new_node_lv(offset);
         }
 
         self.pos += 1;

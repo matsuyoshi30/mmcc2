@@ -37,7 +37,6 @@ impl Generator {
         if node.kind == NodeKind::NdBlock {
             for block in node.blocks {
                 self.gen(Box::new(block));
-                println!("  pop rax");
             }
             return;
         }
@@ -96,6 +95,12 @@ impl Generator {
             }
             println!("  jmp .L.begin.{}", label);
             println!(".L.end.{}:", label);
+            return;
+        }
+
+        if node.kind == NodeKind::NdFunc {
+            println!("  call {}", node.funcname);
+            println!("  push rax");
             return;
         }
 

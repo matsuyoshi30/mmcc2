@@ -9,6 +9,16 @@ use crate::codegen::Generator;
 use crate::parse::Parser;
 use crate::tokenize::tokenize;
 
+fn align(mut n: usize, align: usize) -> usize {
+    if n < align {
+        return align;
+    }
+    while n % align == 0 {
+        n += 1;
+    }
+    return n;
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -29,7 +39,7 @@ fn main() {
     // prologue
     println!("  push rbp");
     println!("  mov rbp, rsp");
-    println!("  sub rsp, {}", (parser.locals.len() + 1) * 8);
+    println!("  sub rsp, {}", align((parser.locals.len() + 1) * 8, 16));
 
     let mut generator = Generator::new();
     for node in parser.nodes {

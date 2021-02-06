@@ -1,12 +1,16 @@
 #!/bin/bash
 mmcc2="./target/debug/mmcc2"
 
+cat <<EOF | cc -x c -c -o tmp2.o -
+int testFunc() { return 5; }
+EOF
+
 assert() {
     expected="$1"
     input="$2"
 
     ${mmcc2} "$input" > tmp.s
-    gcc -o tmp tmp.s
+    gcc -fPIC -o tmp tmp.s tmp2.o
     ./tmp
     actual="$?"
 
@@ -65,5 +69,7 @@ assert 55 'i=0; j=0; for (i=0; i<=10; i=i+1) j=i+j; return j;'
 assert 100 'a=0; for (i=0; i<10; i=i+1) if (i==5) a=100; return a;'
 assert 6 'if (5>3) { a=3; b=2; c=a*b; } return c;'
 assert 100 'ret=0; for (i=0; i<10; i=i+1) { j=0; while (j<10) { ret=ret+1; j=j+1; } } return ret;'
+
+assert 5 '{ return testFunc(); }'
 
 echo OK
