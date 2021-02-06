@@ -54,5 +54,9 @@ assert 22 'a=13; b=a+9;'
 assert 5 'return 5;'
 assert 30 'foo=30; return foo;'
 assert 45 'a=15; b=3; return a*b;'
+assert 10 'if (5>3) return 10;'
+assert 20 'if (5<3) return 10; else return 20;'
+assert 30 'foo=5; if (5<3) return 10; else if (foo==4) return 20; else return 30;'
+assert 40 'foo=5; if (5>3) if (foo==5) return 40; else return 20; else return 30;'
 
 echo OK

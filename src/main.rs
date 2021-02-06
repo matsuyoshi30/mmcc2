@@ -5,7 +5,7 @@ mod codegen;
 mod parse;
 mod tokenize;
 
-use crate::codegen::gen;
+use crate::codegen::Generator;
 use crate::parse::Parser;
 use crate::tokenize::tokenize;
 
@@ -31,8 +31,9 @@ fn main() {
     println!("  mov rbp, rsp");
     println!("  sub rsp, {}", (parser.locals.len() + 1) * 8);
 
+    let mut generator = Generator::new();
     for node in parser.nodes {
-        gen(Box::new(node));
+        generator.gen(Box::new(node));
         println!("  pop rax");
     }
 

@@ -17,6 +17,7 @@ pub enum NodeKind {
     NdNe, // not equal
     NdAs,
     NdLv,
+    NdIf,
     NdRt,
 }
 
@@ -33,6 +34,9 @@ pub struct Node {
     pub rhs: Option<Box<Node>>,
     pub val: u32,
     pub offset: usize,
+    pub cond: Option<Box<Node>>,
+    pub then: Option<Box<Node>>,
+    pub els: Option<Box<Node>>,
 }
 
 impl Node {
@@ -256,10 +260,26 @@ impl<'a> Parser<'a> {
     }
 
     fn stmt(&mut self) -> Node {
-        let node;
+        let mut node;
         if self.tokens[self.pos].op == "return" {
             self.pos += 1;
             node = Node::new_node_return(Box::new(self.expr()));
+        } else if self.tokens[self.pos].op == "if" {
+            node = Node {
+                kind: NodeKind::NdIf,
+                ..Default::default()
+            };
+            self.pos += 1;
+            self.expect("(");
+            node.cond = Some(Box::new(self.expr()));
+            self.expect(")");
+            node.then = Some(Box::new(self.stmt()));
+            if self.tokens[self.pos].op == "else" {
+                self.pos += 1;
+                node.els = Some(Box::new(self.stmt()));
+            }
+
+            return node;
         } else {
             node = self.expr();
         }
@@ -290,5 +310,13 @@ impl<'a> Parser<'a> {
             nodes: vec![],
             locals: vec![],
         }
+    }
+
+    fn expect(&mut self, op: &str) {
+        if &self.tokens[self.pos].op != op {
+            eprintln!("expected {} but got {}", op, self.tokens[self.pos].op);
+            process::exit(1);
+        }
+        self.pos += 1;
     }
 }
