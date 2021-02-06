@@ -105,7 +105,11 @@ fn tokenize(s: String) -> Vec<Token> {
 
         if c.is_alphabetic() || c == '_' {
             let (s, r) = strtos(&expr);
-            tokens.push(Token::new_token(TokenKind::TkIdent, s));
+            if s == "return" {
+                tokens.push(Token::new_token(TokenKind::TkReserved, s));
+            } else {
+                tokens.push(Token::new_token(TokenKind::TkIdent, s));
+            }
             expr = r;
             continue;
         }
@@ -144,6 +148,7 @@ enum NodeKind {
     NdNe, // not equal
     NdAs,
     NdLv,
+    NdRt,
 }
 
 impl Default for NodeKind {
@@ -175,6 +180,14 @@ impl Node {
         Self {
             kind: NodeKind::NdLv,
             offset: offset,
+            ..Default::default()
+        }
+    }
+
+    fn new_node_return(lhs: Box<Node>) -> Self {
+        Self {
+            kind: NodeKind::NdRt,
+            lhs: Some(lhs),
             ..Default::default()
         }
     }
@@ -374,7 +387,13 @@ impl<'a> Parser<'a> {
     }
 
     fn stmt(&mut self) -> Node {
-        let node = self.expr();
+        let node;
+        if self.tokens[self.pos].op == "return" {
+            self.pos += 1;
+            node = Node::new_node_return(Box::new(self.expr()));
+        } else {
+            node = self.expr();
+        }
 
         if self.tokens[self.pos].op.as_str() != ";" {
             eprintln!("expected ';'");
@@ -417,6 +436,15 @@ fn gen_lval(node: Box<Node>) {
 }
 
 fn gen(node: Box<Node>) {
+    if node.kind == NodeKind::NdRt {
+        gen(node.lhs.unwrap());
+        println!("  pop rax");
+        println!("  mov rsp, rbp");
+        println!("  pop rbp");
+        println!("  ret");
+        return;
+    }
+
     if node.kind == NodeKind::NdNum {
         println!("  push {}", node.val);
         return;
@@ -441,8 +469,14 @@ fn gen(node: Box<Node>) {
         return;
     }
 
-    gen(node.lhs.unwrap());
-    gen(node.rhs.unwrap());
+    match node.lhs {
+        Some(inner) => gen(inner),
+        _ => (),
+    }
+    match node.rhs {
+        Some(inner) => gen(inner),
+        _ => (),
+    }
 
     println!("  pop rdi");
     println!("  pop rax");
