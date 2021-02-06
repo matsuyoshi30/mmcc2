@@ -8,6 +8,17 @@ fn strtol(s: &str) -> (&str, String) {
     (op, r.to_string())
 }
 
+fn strtos(s: &str) -> (String, String) {
+    let n = s.find(|c: char| !is_alnum(c)).unwrap_or(s.len());
+    let (op, r) = s.split_at(n);
+
+    (op.to_string(), r.to_string())
+}
+
+fn is_alnum(c: char) -> bool {
+    c.is_ascii_alphabetic() || c.is_digit(10) || c == '_'
+}
+
 #[derive(PartialEq)]
 enum TokenKind {
     TkReserved,
@@ -92,9 +103,10 @@ fn tokenize(s: String) -> Vec<Token> {
             continue;
         }
 
-        if c.is_ascii_alphabetic() {
-            tokens.push(Token::new_token(TokenKind::TkIdent, c.to_string()));
-            expr = expr.split_off(1);
+        if c.is_alphabetic() || c == '_' {
+            let (s, r) = strtos(&expr);
+            tokens.push(Token::new_token(TokenKind::TkIdent, s));
+            expr = r;
             continue;
         }
 
@@ -146,7 +158,7 @@ struct Node {
     lhs: Option<Box<Node>>,
     rhs: Option<Box<Node>>,
     val: u32,
-    offset: u8,
+    offset: usize,
 }
 
 impl Node {
@@ -159,7 +171,7 @@ impl Node {
         }
     }
 
-    fn new_node_lv(offset: u8) -> Self {
+    fn new_node_lv(offset: usize) -> Self {
         Self {
             kind: NodeKind::NdLv,
             offset: offset,
@@ -175,13 +187,29 @@ impl Node {
     }
 }
 
+struct LVar {
+    name: String,
+    offset: usize,
+}
+
 struct Parser<'a> {
     tokens: &'a Vec<Token>,
     pos: usize,
     nodes: Vec<Node>,
+    locals: Vec<LVar>,
 }
 
 impl<'a> Parser<'a> {
+    fn find_lvar(&mut self, name: String) -> usize {
+        for local in &self.locals {
+            if local.name == name {
+                return local.offset;
+            }
+        }
+
+        0
+    }
+
     fn primary(&mut self) -> Node {
         if self.tokens[self.pos].op == "(" {
             self.pos += 1;
@@ -195,8 +223,20 @@ impl<'a> Parser<'a> {
         }
 
         if self.tokens[self.pos].kind == TokenKind::TkIdent {
-            let c = self.tokens[self.pos].op.chars().nth(0).unwrap() as u8;
-            let offset = (c - 97 + 1) * 8; // (c - 'a' + 1) * 8
+            let name = &self.tokens[self.pos].op;
+            let offset = self.find_lvar(name.to_string());
+            if offset != 0 {
+                self.pos += 1;
+                return Node::new_node_lv(offset);
+            }
+
+            let offset = (self.locals.len() + 1) * 8;
+            let lvar = LVar {
+                name: name.to_string(),
+                offset: offset,
+            };
+
+            self.locals.push(lvar);
             self.pos += 1;
             return Node::new_node_lv(offset);
         }
@@ -360,6 +400,7 @@ impl<'a> Parser<'a> {
             tokens: tokens,
             pos: 0,
             nodes: vec![],
+            locals: vec![],
         }
     }
 }
@@ -479,7 +520,7 @@ fn main() {
     // prologue
     println!("  push rbp");
     println!("  mov rbp, rsp");
-    println!("  sub rsp, {}", 26 * 8);
+    println!("  sub rsp, {}", (parser.locals.len() + 1) * 8);
 
     for node in parser.nodes {
         gen(Box::new(node));

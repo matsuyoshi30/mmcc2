@@ -47,5 +47,8 @@ assert 0 '3!=3;'
 assert 5 'a=5;'
 assert 2 'b=3-1;'
 assert 1 'c=5>3;'
+assert 10 'foo=10;'
+assert 22 '_val1=22;'
+assert 123 'bar=10; bar=123;'
 
 echo OK
