@@ -11,6 +11,7 @@ fn strtol(s: &str) -> (&str, String) {
 #[derive(PartialEq)]
 enum TokenKind {
     TkReserved,
+    TkIdent,
     TkNum,
     TkEof,
 }
@@ -74,8 +75,14 @@ fn tokenize(s: String) -> Vec<Token> {
                 expr = v;
                 continue;
             } else {
-                eprintln!("unable tokenize");
-                process::exit(1);
+                if expr.chars().nth(1).unwrap() == '!' {
+                    eprintln!("unable tokenize");
+                    process::exit(1);
+                } else {
+                    tokens.push(Token::new_token(TokenKind::TkReserved, c.to_string()));
+                    expr = expr.split_off(1);
+                    continue;
+                }
             }
         }
 
@@ -85,11 +92,23 @@ fn tokenize(s: String) -> Vec<Token> {
             continue;
         }
 
+        if c.is_ascii_alphabetic() {
+            tokens.push(Token::new_token(TokenKind::TkIdent, c.to_string()));
+            expr = expr.split_off(1);
+            continue;
+        }
+
         if c.is_digit(10) {
             let (n, r) = strtol(&expr);
             let token = Token::new_token_num(n.parse().unwrap());
             tokens.push(token);
             expr = r;
+            continue;
+        }
+
+        if c == ';' {
+            tokens.push(Token::new_token(TokenKind::TkReserved, c.to_string()));
+            expr = expr.split_off(1);
             continue;
         }
     }
@@ -111,6 +130,8 @@ enum NodeKind {
     NdOl, // or less <=
     NdEq, // equal
     NdNe, // not equal
+    NdAs,
+    NdLv,
 }
 
 impl Default for NodeKind {
@@ -125,6 +146,7 @@ struct Node {
     lhs: Option<Box<Node>>,
     rhs: Option<Box<Node>>,
     val: u32,
+    offset: u8,
 }
 
 impl Node {
@@ -133,6 +155,14 @@ impl Node {
             kind: kind,
             lhs: Some(lhs),
             rhs: Some(rhs),
+            ..Default::default()
+        }
+    }
+
+    fn new_node_lv(offset: u8) -> Self {
+        Self {
+            kind: NodeKind::NdLv,
+            offset: offset,
             ..Default::default()
         }
     }
@@ -148,6 +178,7 @@ impl Node {
 struct Parser<'a> {
     tokens: &'a Vec<Token>,
     pos: usize,
+    nodes: Vec<Node>,
 }
 
 impl<'a> Parser<'a> {
@@ -161,6 +192,13 @@ impl<'a> Parser<'a> {
             }
             self.pos += 1;
             return node;
+        }
+
+        if self.tokens[self.pos].kind == TokenKind::TkIdent {
+            let c = self.tokens[self.pos].op.chars().nth(0).unwrap() as u8;
+            let offset = (c - 97 + 1) * 8; // (c - 'a' + 1) * 8
+            self.pos += 1;
+            return Node::new_node_lv(offset);
         }
 
         self.pos += 1;
@@ -280,21 +318,85 @@ impl<'a> Parser<'a> {
         lhs
     }
 
+    fn assign(&mut self) -> Node {
+        let mut lhs = self.equality();
+
+        if self.tokens[self.pos].op.as_str() == "=" {
+            self.pos += 1;
+            lhs = Node::new_node(NodeKind::NdAs, Box::new(lhs), Box::new(self.assign()));
+        }
+
+        lhs
+    }
+
     fn expr(&mut self) -> Node {
-        return self.equality();
+        return self.assign();
+    }
+
+    fn stmt(&mut self) -> Node {
+        let node = self.expr();
+
+        if self.tokens[self.pos].op.as_str() != ";" {
+            eprintln!("expected ';'");
+            process::exit(1)
+        }
+        self.pos += 1;
+
+        node
+    }
+
+    fn program(&mut self) {
+        let mut nodes: Vec<Node> = vec![];
+
+        while self.tokens[self.pos].kind != TokenKind::TkEof {
+            nodes.push(self.stmt());
+        }
+
+        self.nodes = nodes;
     }
 
     fn new(tokens: &'a Vec<Token>) -> Self {
         Self {
             tokens: tokens,
             pos: 0,
+            nodes: vec![],
         }
     }
+}
+
+fn gen_lval(node: Box<Node>) {
+    if node.kind != NodeKind::NdLv {
+        eprintln!("The left value of the assignment is not a variable.");
+        process::exit(1);
+    }
+
+    println!("  mov rax, rbp");
+    println!("  sub rax, {}", node.offset);
+    println!("  push rax");
 }
 
 fn gen(node: Box<Node>) {
     if node.kind == NodeKind::NdNum {
         println!("  push {}", node.val);
+        return;
+    }
+
+    if node.kind == NodeKind::NdLv {
+        gen_lval(node);
+        println!("  pop rax");
+        println!("  mov rax, [rax]"); // load value from the address in rax into rax
+        println!("  push rax");
+        return;
+    }
+
+    if node.kind == NodeKind::NdAs {
+        gen_lval(node.lhs.unwrap());
+        gen(node.rhs.unwrap());
+
+        println!("  pop rdi");
+        println!("  pop rax");
+        println!("  mov [rax], rdi"); // store value from rdi into the address in rax
+        println!("  push rdi");
         return;
     }
 
@@ -368,14 +470,25 @@ fn main() {
     let tokens = tokenize(input.to_string());
 
     let mut parser = Parser::new(&tokens);
-    let node = parser.expr();
+    parser.program();
 
     println!(".intel_syntax noprefix");
     println!(".global main");
     println!("main:");
 
-    gen(Box::new(node));
+    // prologue
+    println!("  push rbp");
+    println!("  mov rbp, rsp");
+    println!("  sub rsp, {}", 26 * 8);
 
-    println!("  pop rax");
+    for node in parser.nodes {
+        gen(Box::new(node));
+        println!("  pop rax");
+    }
+
+    // epilogue
+    println!("  mov rsp, rbp");
+    println!("  pop rbp");
+
     println!("  ret");
 }
