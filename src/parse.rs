@@ -19,6 +19,7 @@ pub enum NodeKind {
     NdLv,
     NdIf,
     NdWhile,
+    NdFor,
     NdRt,
 }
 
@@ -38,6 +39,8 @@ pub struct Node {
     pub cond: Option<Box<Node>>,
     pub then: Option<Box<Node>>,
     pub els: Option<Box<Node>>,
+    pub preop: Option<Box<Node>>,
+    pub postop: Option<Box<Node>>,
 }
 
 impl Node {
@@ -289,6 +292,28 @@ impl<'a> Parser<'a> {
             self.pos += 1;
             self.expect("(");
             node.cond = Some(Box::new(self.expr()));
+            self.expect(")");
+            node.then = Some(Box::new(self.stmt()));
+
+            return node;
+        } else if self.tokens[self.pos].op == "for" {
+            node = Node {
+                kind: NodeKind::NdFor,
+                ..Default::default()
+            };
+            self.pos += 1;
+            self.expect("(");
+            if self.tokens[self.pos].op != ";" {
+                node.preop = Some(Box::new(self.expr()));
+            }
+            self.expect(";");
+            if self.tokens[self.pos].op != ";" {
+                node.cond = Some(Box::new(self.expr()));
+            }
+            self.expect(";");
+            if self.tokens[self.pos].op != ")" {
+                node.postop = Some(Box::new(self.expr()));
+            }
             self.expect(")");
             node.then = Some(Box::new(self.stmt()));
 

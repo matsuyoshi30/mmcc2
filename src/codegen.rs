@@ -70,6 +70,27 @@ impl Generator {
             return;
         }
 
+        if node.kind == NodeKind::NdFor {
+            let label = self.new_label();
+            if let Some(preop) = node.preop {
+                self.gen(preop);
+            }
+            println!(".L.begin.{}:", label);
+            if let Some(cond) = node.cond {
+                self.gen(cond);
+            }
+            println!("  pop rax");
+            println!("  cmp rax, 0");
+            println!("  je .L.end.{}", label);
+            self.gen(node.then.unwrap());
+            if let Some(postop) = node.postop {
+                self.gen(postop);
+            }
+            println!("  jmp .L.begin.{}", label);
+            println!(".L.end.{}:", label);
+            return;
+        }
+
         if node.kind == NodeKind::NdNum {
             println!("  push {}", node.val);
             return;
