@@ -78,10 +78,10 @@ impl Generator {
             println!(".L.begin.{}:", label);
             if let Some(cond) = node.cond {
                 self.gen(cond);
+                println!("  pop rax");
+                println!("  cmp rax, 0");
+                println!("  je .L.end.{}", label);
             }
-            println!("  pop rax");
-            println!("  cmp rax, 0");
-            println!("  je .L.end.{}", label);
             self.gen(node.then.unwrap());
             if let Some(postop) = node.postop {
                 self.gen(postop);
