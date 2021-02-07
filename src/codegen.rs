@@ -1,6 +1,6 @@
 use std::process;
 
-use crate::parse::{Node, NodeKind};
+use crate::parse::{Node, NodeKind, Parser};
 
 pub struct Generator {
     label: u32,
@@ -26,7 +26,7 @@ impl Generator {
         println!("  push rax");
     }
 
-    pub fn gen(&mut self, node: Box<Node>) {
+    fn gen(&mut self, node: Box<Node>) {
         if node.kind == NodeKind::NdRt {
             self.gen(node.lhs.unwrap());
             println!("  pop rax");
@@ -204,7 +204,45 @@ impl Generator {
         println!("  push rax");
     }
 
+    pub fn codegen(&mut self, parser: Parser) {
+        println!(".intel_syntax noprefix");
+        for function in parser.functions {
+            println!(".global {}", function.name);
+            println!("{}:", function.name);
+
+            // prologue
+            println!("  push rbp");
+            println!("  mov rbp, rsp");
+            println!("  sub rsp, {}", align((function.locals.len() + 1) * 8, 16));
+
+            for n in 0..function.paramnum {
+                println!("  mov [rbp-{}], {}", (n + 1) * 8, ARG_REGS[n]);
+            }
+
+            for node in function.body {
+                self.gen(Box::new(node));
+                println!("  pop rax");
+            }
+
+            // epilogue
+            println!("  mov rsp, rbp");
+            println!("  pop rbp");
+
+            println!("  ret");
+        }
+    }
+
     pub fn new() -> Self {
         Self { label: 0 }
     }
+}
+
+fn align(mut n: usize, align: usize) -> usize {
+    if n < align {
+        return align;
+    }
+    while n % align == 0 {
+        n += 1;
+    }
+    return n;
 }

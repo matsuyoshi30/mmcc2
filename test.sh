@@ -73,5 +73,8 @@ assert 100 'main() { ret=0; for (i=0; i<10; i=i+1) { j=0; while (j<10) { ret=ret
 assert 5 'main() { return testFunc1(); }'
 assert 3 'main() { return testFunc2(1, 2); }'
 assert 21 'main() { return testFunc3(1, 2, 3, 4, 5, 6); }'
+assert 3 'main() { return ret(1, 2); } ret(x, y) { return x+y; }'
+assert 21 'main() { return ret(1, 2, 3, 4, 5, 6); } ret(a, b, c, d, e, f) { return a+b+c+d+e+f; }'
+assert 8 'main() { return fib(6); } fib(n) { if (n <= 2) { return 1; } else { return fib(n-1) + fib(n-2); } }'
 
 echo OK

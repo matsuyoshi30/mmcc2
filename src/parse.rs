@@ -90,6 +90,7 @@ pub struct LVar {
 
 pub struct Function {
     pub name: String,
+    pub paramnum: usize,
     pub locals: Vec<LVar>,
     pub body: Vec<Node>,
 }
@@ -119,10 +120,10 @@ impl<'a> Parser<'a> {
             return args;
         }
 
-        args.push(self.primary());
+        args.push(self.add());
         while self.tokens[self.pos].op == "," {
             self.pos += 1;
-            args.push(self.primary());
+            args.push(self.add());
         }
         self.expect(")");
 
@@ -390,12 +391,34 @@ impl<'a> Parser<'a> {
     fn function(&mut self) -> Function {
         let mut func = Function {
             name: self.expect_ident(),
+            paramnum: 0,
             locals: vec![],
             body: vec![],
         };
 
         self.expect("(");
-        self.expect(")");
+        if self.tokens[self.pos].op == ")" {
+            self.pos += 1;
+        } else {
+            let lvar = LVar {
+                name: self.tokens[self.pos].op.to_string(),
+                offset: (self.temp_locals.len() + 1) * 8,
+            };
+            self.temp_locals.push(lvar);
+            self.pos += 1;
+
+            while self.tokens[self.pos].op == "," {
+                self.pos += 1;
+                let lvar = LVar {
+                    name: self.tokens[self.pos].op.to_string(),
+                    offset: (self.temp_locals.len() + 1) * 8,
+                };
+                self.temp_locals.push(lvar);
+                self.pos += 1;
+            }
+            func.paramnum = self.temp_locals.len();
+            self.expect(")");
+        }
         self.expect("{");
 
         while self.tokens[self.pos].op != "}" {
