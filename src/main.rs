@@ -33,23 +33,25 @@ fn main() {
     parser.program();
 
     println!(".intel_syntax noprefix");
-    println!(".global main");
-    println!("main:");
+    for function in parser.functions {
+        println!(".global {}", function.name);
+        println!("{}:", function.name);
 
-    // prologue
-    println!("  push rbp");
-    println!("  mov rbp, rsp");
-    println!("  sub rsp, {}", align((parser.locals.len() + 1) * 8, 16));
+        // prologue
+        println!("  push rbp");
+        println!("  mov rbp, rsp");
+        println!("  sub rsp, {}", align((function.locals.len() + 1) * 8, 16));
 
-    let mut generator = Generator::new();
-    for node in parser.nodes {
-        generator.gen(Box::new(node));
-        println!("  pop rax");
+        let mut generator = Generator::new();
+        for node in function.body {
+            generator.gen(Box::new(node));
+            println!("  pop rax");
+        }
+
+        // epilogue
+        println!("  mov rsp, rbp");
+        println!("  pop rbp");
+
+        println!("  ret");
     }
-
-    // epilogue
-    println!("  mov rsp, rbp");
-    println!("  pop rbp");
-
-    println!("  ret");
 }

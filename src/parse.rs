@@ -82,21 +82,28 @@ impl Node {
     }
 }
 
+#[derive(Clone)]
 pub struct LVar {
     pub name: String,
     pub offset: usize,
 }
 
+pub struct Function {
+    pub name: String,
+    pub locals: Vec<LVar>,
+    pub body: Vec<Node>,
+}
+
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
     pos: usize,
-    pub nodes: Vec<Node>,
-    pub locals: Vec<LVar>,
+    temp_locals: Vec<LVar>,
+    pub functions: Vec<Function>,
 }
 
 impl<'a> Parser<'a> {
     fn find_lvar(&mut self, name: String) -> usize {
-        for local in &self.locals {
+        for local in &self.temp_locals {
             if local.name == name {
                 return local.offset;
             }
@@ -154,13 +161,13 @@ impl<'a> Parser<'a> {
                     return Node::new_node_lv(offset);
                 }
 
-                let offset = (self.locals.len() + 1) * 8;
+                let offset = (self.temp_locals.len() + 1) * 8;
                 let lvar = LVar {
                     name: name.to_string(),
                     offset: offset,
                 };
 
-                self.locals.push(lvar);
+                self.temp_locals.push(lvar);
                 return Node::new_node_lv(offset);
             }
         }
@@ -380,22 +387,44 @@ impl<'a> Parser<'a> {
         node
     }
 
-    pub fn program(&mut self) {
-        let mut nodes: Vec<Node> = vec![];
+    fn function(&mut self) -> Function {
+        let mut func = Function {
+            name: self.expect_ident(),
+            locals: vec![],
+            body: vec![],
+        };
 
-        while self.tokens[self.pos].kind != TokenKind::TkEof {
-            nodes.push(self.stmt());
+        self.expect("(");
+        self.expect(")");
+        self.expect("{");
+
+        while self.tokens[self.pos].op != "}" {
+            func.body.push(self.stmt());
         }
 
-        self.nodes = nodes;
+        func.locals = self.temp_locals.clone();
+        self.temp_locals = Vec::new();
+        self.pos += 1;
+
+        func
+    }
+
+    pub fn program(&mut self) {
+        let mut funcs: Vec<Function> = vec![];
+
+        while self.tokens[self.pos].kind != TokenKind::TkEof {
+            funcs.push(self.function());
+        }
+
+        self.functions = funcs;
     }
 
     pub fn new(tokens: &'a Vec<Token>) -> Self {
         Self {
             tokens: tokens,
             pos: 0,
-            nodes: vec![],
-            locals: vec![],
+            temp_locals: vec![],
+            functions: vec![],
         }
     }
 
@@ -405,5 +434,16 @@ impl<'a> Parser<'a> {
             process::exit(1);
         }
         self.pos += 1;
+    }
+
+    fn expect_ident(&mut self) -> String {
+        if self.tokens[self.pos].kind != TokenKind::TkIdent {
+            eprintln!("expected identifier but got {}", self.tokens[self.pos].op);
+            process::exit(1);
+        }
+        let ident = &self.tokens[self.pos].op;
+        self.pos += 1;
+
+        ident.to_string()
     }
 }
