@@ -45,6 +45,7 @@ pub struct Node {
     pub postop: Option<Box<Node>>,
     pub blocks: Vec<Node>,
     pub funcname: String,
+    pub args: Vec<Node>,
 }
 
 impl Node {
@@ -104,6 +105,23 @@ impl<'a> Parser<'a> {
         0
     }
 
+    fn funcargs(&mut self) -> Vec<Node> {
+        let mut args = vec![];
+        if self.tokens[self.pos].op == ")" {
+            self.pos += 1;
+            return args;
+        }
+
+        args.push(self.primary());
+        while self.tokens[self.pos].op == "," {
+            self.pos += 1;
+            args.push(self.primary());
+        }
+        self.expect(")");
+
+        args
+    }
+
     fn primary(&mut self) -> Node {
         if self.tokens[self.pos].op == "(" {
             self.pos += 1;
@@ -121,13 +139,13 @@ impl<'a> Parser<'a> {
 
             self.pos += 1;
             if self.tokens[self.pos].op == "(" {
+                self.pos += 1;
                 let node = Node {
                     kind: NodeKind::NdFunc,
                     funcname: name.to_string(),
+                    args: self.funcargs(),
                     ..Default::default()
                 };
-                self.pos += 1;
-                self.expect(")");
 
                 return node;
             } else {

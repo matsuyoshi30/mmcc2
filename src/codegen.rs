@@ -6,6 +6,8 @@ pub struct Generator {
     label: u32,
 }
 
+static ARG_REGS: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+
 impl Generator {
     fn new_label(&mut self) -> u32 {
         let label = self.label;
@@ -99,6 +101,15 @@ impl Generator {
         }
 
         if node.kind == NodeKind::NdFunc {
+            let len = node.args.len();
+            for args in node.args {
+                self.gen(Box::new(args));
+            }
+
+            for n in (0..len).rev() {
+                println!("  pop {}", ARG_REGS[n]);
+            }
+
             println!("  call {}", node.funcname);
             println!("  push rax");
             return;

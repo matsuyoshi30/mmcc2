@@ -2,7 +2,9 @@
 mmcc2="./target/debug/mmcc2"
 
 cat <<EOF | cc -x c -c -o tmp2.o -
-int testFunc() { return 5; }
+int testFunc1() { return 5; }
+int testFunc2(int x, int y) { return x+y; }
+int testFunc3(int a, int b, int c, int d, int e, int f) { return a+b+c+d+e+f;}
 EOF
 
 assert() {
@@ -69,7 +71,8 @@ assert 55 'i=0; j=0; for (i=0; i<=10; i=i+1) j=i+j; return j;'
 assert 100 'a=0; for (i=0; i<10; i=i+1) if (i==5) a=100; return a;'
 assert 6 'if (5>3) { a=3; b=2; c=a*b; } return c;'
 assert 100 'ret=0; for (i=0; i<10; i=i+1) { j=0; while (j<10) { ret=ret+1; j=j+1; } } return ret;'
-
-assert 5 '{ return testFunc(); }'
+assert 5 '{ return testFunc1(); }'
+assert 3 '{ return testFunc2(1, 2); }'
+assert 21 '{ return testFunc3(1, 2, 3, 4, 5, 6); }'
 
 echo OK
