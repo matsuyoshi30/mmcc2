@@ -14,6 +14,11 @@ fn strtos(s: &str) -> (String, String) {
     (op.to_string(), r.to_string())
 }
 
+fn strchr(s: &str, ch: char) -> bool {
+    let vec = s.chars().collect::<Vec<char>>();
+    vec.contains(&ch)
+}
+
 fn is_alnum(c: char) -> bool {
     c.is_ascii_alphabetic() || c.is_digit(10) || c == '_'
 }
@@ -114,16 +119,7 @@ pub fn tokenize(s: String) -> Vec<Token> {
             }
         }
 
-        if c == '+'
-            || c == '-'
-            || c == '*'
-            || c == '/'
-            || c == '('
-            || c == ')'
-            || c == '{'
-            || c == '}'
-            || c == ','
-        {
+        if strchr("+-*/(){},;", c) {
             tokens.push(Token::new_token(TokenKind::TkReserved, c.to_string()));
             expr = expr.split_off(1);
             continue;
@@ -145,12 +141,6 @@ pub fn tokenize(s: String) -> Vec<Token> {
             let token = Token::new_token_num(n.parse().unwrap());
             tokens.push(token);
             expr = r;
-            continue;
-        }
-
-        if c == ';' {
-            tokens.push(Token::new_token(TokenKind::TkReserved, c.to_string()));
-            expr = expr.split_off(1);
             continue;
         }
     }

@@ -5,25 +5,25 @@ use crate::types::{Type, TypeKind};
 
 #[derive(PartialEq)]
 pub enum NodeKind {
-    NdAdd,
-    NdSub,
-    NdMul,
-    NdDiv,
-    NdNum,
-    NdMt, // more than >
-    NdLt, // less than <
-    NdOm, // or more >=
-    NdOl, // or less <=
-    NdEq, // equal
-    NdNe, // not equal
-    NdAs,
-    NdLv,
-    NdIf,
-    NdWhile,
-    NdFor,
-    NdBlock,
-    NdFunc,
-    NdRt,
+    NdAdd,   // +
+    NdSub,   // -
+    NdMul,   // *
+    NdDiv,   // /
+    NdNum,   // number
+    NdMt,    // more than >
+    NdLt,    // less than <
+    NdOm,    // or more >=
+    NdOl,    // or less <=
+    NdEq,    // equal
+    NdNe,    // not equal
+    NdAs,    // assign =
+    NdLv,    // local variable
+    NdIf,    // if
+    NdWhile, // while
+    NdFor,   // for
+    NdBlock, // block {}
+    NdFunc,  // function
+    NdRt,    // return
 }
 
 impl Default for NodeKind {
@@ -50,35 +50,39 @@ pub struct Node {
 }
 
 impl Node {
-    fn new_node(kind: NodeKind, lhs: Box<Node>, rhs: Box<Node>) -> Self {
+    fn new_node(kind: NodeKind) -> Self {
         Self {
             kind: kind,
+            ..Default::default()
+        }
+    }
+
+    fn new_binary(kind: NodeKind, lhs: Box<Node>, rhs: Box<Node>) -> Self {
+        Self {
             lhs: Some(lhs),
             rhs: Some(rhs),
-            ..Default::default()
+            ..Node::new_node(kind)
+        }
+    }
+
+    fn new_unary(kind: NodeKind, expr: Box<Node>) -> Self {
+        Self {
+            lhs: Some(expr),
+            ..Node::new_node(kind)
         }
     }
 
     fn new_node_lv(offset: usize) -> Self {
         Self {
-            kind: NodeKind::NdLv,
             offset: offset,
-            ..Default::default()
-        }
-    }
-
-    fn new_node_return(lhs: Box<Node>) -> Self {
-        Self {
-            kind: NodeKind::NdRt,
-            lhs: Some(lhs),
-            ..Default::default()
+            ..Node::new_node(NodeKind::NdLv)
         }
     }
 
     fn new_node_num(val: u32) -> Self {
         Self {
             val: val,
-            ..Default::default()
+            ..Node::new_node(NodeKind::NdNum)
         }
     }
 }
@@ -88,6 +92,16 @@ pub struct LVar {
     pub ty: TypeKind,
     pub name: String,
     pub offset: usize,
+}
+
+impl LVar {
+    fn new_lvar(ty: TypeKind, name: String, offset: usize) -> Self {
+        Self {
+            ty: ty,
+            name: name,
+            offset: offset,
+        }
+    }
 }
 
 pub struct Function {
@@ -118,14 +132,12 @@ impl<'a> Parser<'a> {
 
     fn funcargs(&mut self) -> Vec<Node> {
         let mut args = vec![];
-        if self.tokens[self.pos].op == ")" {
-            self.pos += 1;
+        if self.consume(")") {
             return args;
         }
 
         args.push(self.add());
-        while self.tokens[self.pos].op == "," {
-            self.pos += 1;
+        while self.consume(",") {
             args.push(self.add());
         }
         self.expect(")");
@@ -133,15 +145,11 @@ impl<'a> Parser<'a> {
         args
     }
 
+    // primary = '(' expr ')' | ident ( "(" (args)* ")" )? | num
     fn primary(&mut self) -> Node {
-        if self.tokens[self.pos].op == "(" {
-            self.pos += 1;
+        if self.consume("(") {
             let node = self.expr();
-            if self.tokens[self.pos].op != ")" {
-                eprintln!("unexpected token: {}", self.tokens[self.pos].op);
-                process::exit(1);
-            }
-            self.pos += 1;
+            self.expect(")");
             return node;
         }
 
@@ -149,8 +157,7 @@ impl<'a> Parser<'a> {
             let name = &self.tokens[self.pos].op;
 
             self.pos += 1;
-            if self.tokens[self.pos].op == "(" {
-                self.pos += 1;
+            if self.consume("(") {
                 let node = Node {
                     kind: NodeKind::NdFunc,
                     funcname: name.to_string(),
@@ -169,14 +176,13 @@ impl<'a> Parser<'a> {
         Node::new_node_num(self.tokens[self.pos - 1].val)
     }
 
+    // unary = ( '+' | '-' )? primary
     fn unary(&mut self) -> Node {
-        if self.tokens[self.pos].op == "+" {
-            self.pos += 1;
+        if self.consume("+") {
             return self.unary();
         }
-        if self.tokens[self.pos].op == "-" {
-            self.pos += 1;
-            return Node::new_node(
+        if self.consume("-") {
+            return Node::new_binary(
                 NodeKind::NdSub,
                 Box::new(Node::new_node_num(0)),
                 Box::new(self.unary()),
@@ -186,189 +192,148 @@ impl<'a> Parser<'a> {
         self.primary()
     }
 
+    // mul = unary ( '*' unary | '/' unary )*
     fn mul(&mut self) -> Node {
         let mut lhs = self.unary();
 
         loop {
-            match self.tokens[self.pos].op.as_str() {
-                "*" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdMul, Box::new(lhs), Box::new(self.unary()));
-                }
-                "/" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdDiv, Box::new(lhs), Box::new(self.unary()));
-                }
-                _ => {
-                    break;
-                }
+            if self.consume("*") {
+                lhs = Node::new_binary(NodeKind::NdMul, Box::new(lhs), Box::new(self.unary()));
+            } else if self.consume("/") {
+                lhs = Node::new_binary(NodeKind::NdDiv, Box::new(lhs), Box::new(self.unary()));
+            } else {
+                break;
             }
         }
 
         lhs
     }
 
+    // add = mul ( "+" mul | "-" mul )*
     fn add(&mut self) -> Node {
         let mut lhs = self.mul();
 
         loop {
-            match self.tokens[self.pos].op.as_str() {
-                "+" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdAdd, Box::new(lhs), Box::new(self.mul()));
-                }
-                "-" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdSub, Box::new(lhs), Box::new(self.mul()));
-                }
-                _ => {
-                    break;
-                }
+            if self.consume("+") {
+                lhs = Node::new_binary(NodeKind::NdAdd, Box::new(lhs), Box::new(self.mul()));
+            } else if self.consume("-") {
+                lhs = Node::new_binary(NodeKind::NdSub, Box::new(lhs), Box::new(self.mul()));
+            } else {
+                break;
             }
         }
 
         lhs
     }
 
+    // relational = add ( ">" add | "<" add | ">=" add | "<=" add )*
     fn relational(&mut self) -> Node {
         let mut lhs = self.add();
 
         loop {
-            match self.tokens[self.pos].op.as_str() {
-                ">" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdMt, Box::new(lhs), Box::new(self.add()));
-                }
-                "<" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdLt, Box::new(lhs), Box::new(self.add()));
-                }
-                ">=" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdOm, Box::new(lhs), Box::new(self.add()));
-                }
-                "<=" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdOl, Box::new(lhs), Box::new(self.add()));
-                }
-                _ => {
-                    break;
-                }
+            if self.consume(">") {
+                lhs = Node::new_binary(NodeKind::NdMt, Box::new(lhs), Box::new(self.add()));
+            } else if self.consume("<") {
+                lhs = Node::new_binary(NodeKind::NdLt, Box::new(lhs), Box::new(self.add()));
+            } else if self.consume(">=") {
+                lhs = Node::new_binary(NodeKind::NdOm, Box::new(lhs), Box::new(self.add()));
+            } else if self.consume("<=") {
+                lhs = Node::new_binary(NodeKind::NdOl, Box::new(lhs), Box::new(self.add()));
+            } else {
+                break;
             }
         }
 
         lhs
     }
 
+    // equality = relational ( "==" relational | "!=" relational )*
     fn equality(&mut self) -> Node {
         let mut lhs = self.relational();
 
         loop {
-            match self.tokens[self.pos].op.as_str() {
-                "==" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdEq, Box::new(lhs), Box::new(self.mul()));
-                }
-                "!=" => {
-                    self.pos += 1;
-                    lhs = Node::new_node(NodeKind::NdNe, Box::new(lhs), Box::new(self.mul()));
-                }
-                _ => {
-                    break;
-                }
+            if self.consume("==") {
+                lhs = Node::new_binary(NodeKind::NdEq, Box::new(lhs), Box::new(self.mul()));
+            } else if self.consume("!=") {
+                lhs = Node::new_binary(NodeKind::NdNe, Box::new(lhs), Box::new(self.mul()));
+            } else {
+                break;
             }
         }
 
         lhs
     }
 
+    // assign = equality ( "=" assign )?
     fn assign(&mut self) -> Node {
         let mut lhs = self.equality();
 
-        if self.tokens[self.pos].op.as_str() == "=" {
-            self.pos += 1;
-            lhs = Node::new_node(NodeKind::NdAs, Box::new(lhs), Box::new(self.assign()));
+        if self.consume("=") {
+            lhs = Node::new_binary(NodeKind::NdAs, Box::new(lhs), Box::new(self.assign()));
         }
 
         lhs
     }
 
+    // expr = assign
     fn expr(&mut self) -> Node {
         return self.assign();
     }
 
+    // stmt = "return" expr ";"
+    //        | type ident ";"
+    //        | "{" stmt* "}"
+    //        | "if" "(" cond ")" stmt ( "else" stmt )?
+    //        | "while" "(" cond ")" stmt
+    //        | "for" "(" expr? ";" expr? ";" expr? ")" stmt
+    //        | expr ";"
     fn stmt(&mut self) -> Node {
         let mut node;
 
-        if self.tokens[self.pos].op == "{" {
-            node = Node {
-                kind: NodeKind::NdBlock,
-                blocks: vec![],
-                ..Default::default()
-            };
-            self.pos += 1;
-            while self.tokens[self.pos].op != "}" {
+        if self.consume("{") {
+            node = Node::new_node(NodeKind::NdBlock);
+            node.blocks = vec![];
+            while !self.consume("}") {
                 node.blocks.push(self.stmt());
             }
-            self.pos += 1;
             return node;
         }
 
         let ty = Type::consume_type(&self.tokens[self.pos].op);
         if ty.kind != TypeKind::TyNone {
             self.pos += 1;
-            let name = &self.tokens[self.pos].op;
+            let name = self.expect_ident();
             let offset = (self.temp_locals.len() + 1) * 8;
-            let lvar = LVar {
-                ty: ty.kind,
-                name: name.to_string(),
-                offset: offset,
-            };
-
-            self.pos += 1;
+            let lvar = LVar::new_lvar(ty.kind, name, offset);
             self.expect(";");
 
             self.temp_locals.push(lvar);
             return Node::new_node_lv(offset);
         }
 
-        if self.tokens[self.pos].op == "return" {
-            self.pos += 1;
-            node = Node::new_node_return(Box::new(self.expr()));
-        } else if self.tokens[self.pos].op == "if" {
-            node = Node {
-                kind: NodeKind::NdIf,
-                ..Default::default()
-            };
-            self.pos += 1;
+        if self.consume("return") {
+            node = Node::new_unary(NodeKind::NdRt, Box::new(self.expr()));
+        } else if self.consume("if") {
+            node = Node::new_node(NodeKind::NdIf);
             self.expect("(");
             node.cond = Some(Box::new(self.expr()));
             self.expect(")");
             node.then = Some(Box::new(self.stmt()));
-            if self.tokens[self.pos].op == "else" {
-                self.pos += 1;
+            if self.consume("else") {
                 node.els = Some(Box::new(self.stmt()));
             }
 
             return node;
-        } else if self.tokens[self.pos].op == "while" {
-            node = Node {
-                kind: NodeKind::NdWhile,
-                ..Default::default()
-            };
-            self.pos += 1;
+        } else if self.consume("while") {
+            node = Node::new_node(NodeKind::NdWhile);
             self.expect("(");
             node.cond = Some(Box::new(self.expr()));
             self.expect(")");
             node.then = Some(Box::new(self.stmt()));
 
             return node;
-        } else if self.tokens[self.pos].op == "for" {
-            node = Node {
-                kind: NodeKind::NdFor,
-                ..Default::default()
-            };
-            self.pos += 1;
+        } else if self.consume("for") {
+            node = Node::new_node(NodeKind::NdFor);
             self.expect("(");
             if self.tokens[self.pos].op != ";" {
                 node.preop = Some(Box::new(self.expr()));
@@ -389,15 +354,12 @@ impl<'a> Parser<'a> {
             node = self.expr();
         }
 
-        if self.tokens[self.pos].op.as_str() != ";" {
-            eprintln!("expected ';'");
-            process::exit(1)
-        }
-        self.pos += 1;
+        self.expect(";");
 
         node
     }
 
+    // function = type ident "(" (type params)* ")" "{" stmt* "}"
     fn function(&mut self) -> Function {
         let ty = Type::consume_type(&self.tokens[self.pos].op);
         self.pos += 1;
@@ -411,32 +373,28 @@ impl<'a> Parser<'a> {
         };
 
         self.expect("(");
-        if self.tokens[self.pos].op == ")" {
-            self.pos += 1;
+        if self.consume(")") {
         } else {
             let mut ty = Type::consume_type(&self.tokens[self.pos].op);
             self.pos += 1;
-            let mut name = self.tokens[self.pos].op.to_string();
+            let mut name = self.expect_ident();
             let lvar = LVar {
                 ty: ty.kind,
                 name: name,
                 offset: (self.temp_locals.len() + 1) * 8,
             };
             self.temp_locals.push(lvar);
-            self.pos += 1;
 
-            while self.tokens[self.pos].op == "," {
-                self.pos += 1;
+            while self.consume(",") {
                 ty = Type::consume_type(&self.tokens[self.pos].op);
                 self.pos += 1;
-                name = self.tokens[self.pos].op.to_string();
+                name = self.expect_ident();
                 let lvar = LVar {
                     ty: ty.kind,
                     name: name,
                     offset: (self.temp_locals.len() + 1) * 8,
                 };
                 self.temp_locals.push(lvar);
-                self.pos += 1;
             }
             func.paramnum = self.temp_locals.len();
             self.expect(")");
@@ -454,6 +412,7 @@ impl<'a> Parser<'a> {
         func
     }
 
+    // program = function*
     pub fn program(&mut self) {
         let mut funcs: Vec<Function> = vec![];
 
@@ -471,6 +430,15 @@ impl<'a> Parser<'a> {
             temp_locals: vec![],
             functions: vec![],
         }
+    }
+
+    fn consume(&mut self, op: &str) -> bool {
+        if &self.tokens[self.pos].op == op {
+            self.pos += 1;
+            return true;
+        }
+
+        false
     }
 
     fn expect(&mut self, op: &str) {

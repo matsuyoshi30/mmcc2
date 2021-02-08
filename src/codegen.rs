@@ -27,116 +27,111 @@ impl Generator {
     }
 
     fn gen(&mut self, node: Box<Node>) {
-        if node.kind == NodeKind::NdRt {
-            self.gen(node.lhs.unwrap());
-            println!("  pop rax");
-            println!("  mov rsp, rbp");
-            println!("  pop rbp");
-            println!("  ret");
-            return;
-        }
-
-        if node.kind == NodeKind::NdBlock {
-            for block in node.blocks {
-                self.gen(Box::new(block));
+        match node.kind {
+            NodeKind::NdRt => {
+                self.gen(node.lhs.unwrap());
+                println!("  pop rax");
+                println!("  mov rsp, rbp");
+                println!("  pop rbp");
+                println!("  ret");
+                return;
             }
-            return;
-        }
-
-        if node.kind == NodeKind::NdIf {
-            let label = self.new_label();
-            self.gen(node.cond.unwrap());
-            println!("  pop rax");
-            println!("  cmp rax, 0");
-            match node.els {
-                Some(els) => {
-                    println!("  je .L.else.{}", label);
-                    self.gen(node.then.unwrap());
-                    println!("  jmp .L.end.{}", label);
-                    println!(".L.else.{}:", label);
-                    self.gen(els);
-                    println!(".L.end.{}:", label);
+            NodeKind::NdBlock => {
+                for block in node.blocks {
+                    self.gen(Box::new(block));
                 }
-                None => {
-                    println!("  je .L.end.{}", label);
-                    self.gen(node.then.unwrap());
-                    println!(".L.end.{}:", label);
+                return;
+            }
+            NodeKind::NdIf => {
+                let label = self.new_label();
+                self.gen(node.cond.unwrap());
+                println!("  pop rax");
+                println!("  cmp rax, 0");
+                match node.els {
+                    Some(els) => {
+                        println!("  je .L.else.{}", label);
+                        self.gen(node.then.unwrap());
+                        println!("  jmp .L.end.{}", label);
+                        println!(".L.else.{}:", label);
+                        self.gen(els);
+                        println!(".L.end.{}:", label);
+                    }
+                    None => {
+                        println!("  je .L.end.{}", label);
+                        self.gen(node.then.unwrap());
+                        println!(".L.end.{}:", label);
+                    }
                 }
+                return;
             }
-            return;
-        }
-
-        if node.kind == NodeKind::NdWhile {
-            let label = self.new_label();
-            println!(".L.begin.{}:", label);
-            self.gen(node.cond.unwrap());
-            println!("  pop rax");
-            println!("  cmp rax, 0");
-            println!("  je .L.end.{}", label);
-            self.gen(node.then.unwrap());
-            println!("  jmp .L.begin.{}", label);
-            println!(".L.end.{}:", label);
-            return;
-        }
-
-        if node.kind == NodeKind::NdFor {
-            let label = self.new_label();
-            if let Some(preop) = node.preop {
-                self.gen(preop);
-            }
-            println!(".L.begin.{}:", label);
-            if let Some(cond) = node.cond {
-                self.gen(cond);
+            NodeKind::NdWhile => {
+                let label = self.new_label();
+                println!(".L.begin.{}:", label);
+                self.gen(node.cond.unwrap());
                 println!("  pop rax");
                 println!("  cmp rax, 0");
                 println!("  je .L.end.{}", label);
+                self.gen(node.then.unwrap());
+                println!("  jmp .L.begin.{}", label);
+                println!(".L.end.{}:", label);
+                return;
             }
-            self.gen(node.then.unwrap());
-            if let Some(postop) = node.postop {
-                self.gen(postop);
+            NodeKind::NdFor => {
+                let label = self.new_label();
+                if let Some(preop) = node.preop {
+                    self.gen(preop);
+                }
+                println!(".L.begin.{}:", label);
+                if let Some(cond) = node.cond {
+                    self.gen(cond);
+                    println!("  pop rax");
+                    println!("  cmp rax, 0");
+                    println!("  je .L.end.{}", label);
+                }
+                self.gen(node.then.unwrap());
+                if let Some(postop) = node.postop {
+                    self.gen(postop);
+                }
+                println!("  jmp .L.begin.{}", label);
+                println!(".L.end.{}:", label);
+                return;
             }
-            println!("  jmp .L.begin.{}", label);
-            println!(".L.end.{}:", label);
-            return;
-        }
+            NodeKind::NdFunc => {
+                let len = node.args.len();
+                for args in node.args {
+                    self.gen(Box::new(args));
+                }
 
-        if node.kind == NodeKind::NdFunc {
-            let len = node.args.len();
-            for args in node.args {
-                self.gen(Box::new(args));
+                for n in (0..len).rev() {
+                    println!("  pop {}", ARG_REGS[n]);
+                }
+
+                println!("  call {}", node.funcname);
+                println!("  push rax");
+                return;
             }
-
-            for n in (0..len).rev() {
-                println!("  pop {}", ARG_REGS[n]);
+            NodeKind::NdNum => {
+                println!("  push {}", node.val);
+                return;
             }
+            NodeKind::NdLv => {
+                self.gen_lval(node);
+                println!("  pop rax");
+                println!("  mov rax, [rax]"); // load value from the address in rax into rax
+                println!("  push rax");
+                return;
+            }
+            NodeKind::NdAs => {
+                self.gen_lval(node.lhs.unwrap());
+                self.gen(node.rhs.unwrap());
 
-            println!("  call {}", node.funcname);
-            println!("  push rax");
-            return;
-        }
-
-        if node.kind == NodeKind::NdNum {
-            println!("  push {}", node.val);
-            return;
-        }
-
-        if node.kind == NodeKind::NdLv {
-            self.gen_lval(node);
-            println!("  pop rax");
-            println!("  mov rax, [rax]"); // load value from the address in rax into rax
-            println!("  push rax");
-            return;
-        }
-
-        if node.kind == NodeKind::NdAs {
-            self.gen_lval(node.lhs.unwrap());
-            self.gen(node.rhs.unwrap());
-
-            println!("  pop rdi");
-            println!("  pop rax");
-            println!("  mov [rax], rdi"); // store value from rdi into the address in rax
-            println!("  push rdi");
-            return;
+                println!("  pop rdi");
+                println!("  pop rax");
+                println!("  mov [rax], rdi"); // store value from rdi into the address in rax
+                println!("  push rdi");
+                return;
+            }
+            _ => {}
         }
 
         match node.lhs {
