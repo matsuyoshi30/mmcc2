@@ -56,6 +56,24 @@ impl Token {
     }
 }
 
+fn is_reserved(s: &str) -> bool {
+    let keywords = ["return", "if", "else", "while", "for"];
+    for keyword in &keywords {
+        if &s == keyword {
+            return true;
+        }
+    }
+
+    let types = ["int"];
+    for ty in &types {
+        if &s == ty {
+            return true;
+        }
+    }
+
+    false
+}
+
 pub fn tokenize(s: String) -> Vec<Token> {
     let mut tokens: Vec<Token> = vec![];
 
@@ -113,7 +131,7 @@ pub fn tokenize(s: String) -> Vec<Token> {
 
         if c.is_alphabetic() || c == '_' {
             let (s, r) = strtos(&expr);
-            if s == "return" || s == "if" || s == "else" || s == "while" || s == "for" {
+            if is_reserved(&s) {
                 tokens.push(Token::new_token(TokenKind::TkReserved, s));
             } else {
                 tokens.push(Token::new_token(TokenKind::TkIdent, s));

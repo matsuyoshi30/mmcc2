@@ -4,6 +4,7 @@ use std::process;
 mod codegen;
 mod parse;
 mod tokenize;
+mod types;
 
 use crate::codegen::Generator;
 use crate::parse::Parser;

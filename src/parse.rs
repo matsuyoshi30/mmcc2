@@ -1,6 +1,7 @@
 use std::process;
 
 use crate::tokenize::{Token, TokenKind};
+use crate::types::{Type, TypeKind};
 
 #[derive(PartialEq)]
 pub enum NodeKind {
@@ -84,11 +85,13 @@ impl Node {
 
 #[derive(Clone)]
 pub struct LVar {
+    pub ty: TypeKind,
     pub name: String,
     pub offset: usize,
 }
 
 pub struct Function {
+    pub ty: TypeKind,
     pub name: String,
     pub paramnum: usize,
     pub locals: Vec<LVar>,
@@ -158,17 +161,6 @@ impl<'a> Parser<'a> {
                 return node;
             } else {
                 let offset = self.find_lvar(name.to_string());
-                if offset != 0 {
-                    return Node::new_node_lv(offset);
-                }
-
-                let offset = (self.temp_locals.len() + 1) * 8;
-                let lvar = LVar {
-                    name: name.to_string(),
-                    offset: offset,
-                };
-
-                self.temp_locals.push(lvar);
                 return Node::new_node_lv(offset);
             }
         }
@@ -322,6 +314,24 @@ impl<'a> Parser<'a> {
             return node;
         }
 
+        let ty = Type::consume_type(&self.tokens[self.pos].op);
+        if ty.kind != TypeKind::TyNone {
+            self.pos += 1;
+            let name = &self.tokens[self.pos].op;
+            let offset = (self.temp_locals.len() + 1) * 8;
+            let lvar = LVar {
+                ty: ty.kind,
+                name: name.to_string(),
+                offset: offset,
+            };
+
+            self.pos += 1;
+            self.expect(";");
+
+            self.temp_locals.push(lvar);
+            return Node::new_node_lv(offset);
+        }
+
         if self.tokens[self.pos].op == "return" {
             self.pos += 1;
             node = Node::new_node_return(Box::new(self.expr()));
@@ -389,8 +399,12 @@ impl<'a> Parser<'a> {
     }
 
     fn function(&mut self) -> Function {
+        let ty = Type::consume_type(&self.tokens[self.pos].op);
+        self.pos += 1;
+        let name = self.expect_ident();
         let mut func = Function {
-            name: self.expect_ident(),
+            ty: ty.kind,
+            name: name,
             paramnum: 0,
             locals: vec![],
             body: vec![],
@@ -400,8 +414,12 @@ impl<'a> Parser<'a> {
         if self.tokens[self.pos].op == ")" {
             self.pos += 1;
         } else {
+            let mut ty = Type::consume_type(&self.tokens[self.pos].op);
+            self.pos += 1;
+            let mut name = self.tokens[self.pos].op.to_string();
             let lvar = LVar {
-                name: self.tokens[self.pos].op.to_string(),
+                ty: ty.kind,
+                name: name,
                 offset: (self.temp_locals.len() + 1) * 8,
             };
             self.temp_locals.push(lvar);
@@ -409,8 +427,12 @@ impl<'a> Parser<'a> {
 
             while self.tokens[self.pos].op == "," {
                 self.pos += 1;
+                ty = Type::consume_type(&self.tokens[self.pos].op);
+                self.pos += 1;
+                name = self.tokens[self.pos].op.to_string();
                 let lvar = LVar {
-                    name: self.tokens[self.pos].op.to_string(),
+                    ty: ty.kind,
+                    name: name,
                     offset: (self.temp_locals.len() + 1) * 8,
                 };
                 self.temp_locals.push(lvar);
