@@ -4,6 +4,7 @@
 
 ```
 % git clone https://github.com/matsuyoshi30/mmcc2
+% cd mmcc2
 % docker build -t mmcc2 .
 % ./docker-run
 ```
