@@ -18,6 +18,8 @@ pub enum NodeKind {
     NdNe,    // not equal
     NdAs,    // assign =
     NdLv,    // local variable
+    NdAddr,  // address &
+    NdDeref, // dereference *
     NdIf,    // if
     NdWhile, // while
     NdFor,   // for
@@ -176,7 +178,7 @@ impl<'a> Parser<'a> {
         Node::new_node_num(self.tokens[self.pos - 1].val)
     }
 
-    // unary = ( '+' | '-' )? primary
+    // unary = ( '+' | '-' )? primary | ('&' | '*') unary
     fn unary(&mut self) -> Node {
         if self.consume("+") {
             return self.unary();
@@ -187,6 +189,12 @@ impl<'a> Parser<'a> {
                 Box::new(Node::new_node_num(0)),
                 Box::new(self.unary()),
             );
+        }
+        if self.consume("&") {
+            return Node::new_unary(NodeKind::NdAddr, Box::new(self.unary()));
+        }
+        if self.consume("*") {
+            return Node::new_unary(NodeKind::NdDeref, Box::new(self.unary()));
         }
 
         self.primary()

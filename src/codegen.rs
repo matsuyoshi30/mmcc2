@@ -16,14 +16,19 @@ impl Generator {
     }
 
     fn gen_lval(&mut self, node: Box<Node>) {
-        if node.kind != NodeKind::NdLv {
-            eprintln!("The left value of the assignment is not a variable.");
-            process::exit(1);
+        if node.kind == NodeKind::NdLv {
+            println!("  mov rax, rbp");
+            println!("  sub rax, {}", node.offset);
+            println!("  push rax");
+            return;
+        }
+        if node.kind == NodeKind::NdDeref {
+            self.gen(node.lhs.unwrap());
+            return;
         }
 
-        println!("  mov rax, rbp");
-        println!("  sub rax, {}", node.offset);
-        println!("  push rax");
+        eprintln!("The left value of the assignment is not a variable.");
+        process::exit(1);
     }
 
     fn gen(&mut self, node: Box<Node>) {
@@ -129,6 +134,17 @@ impl Generator {
                 println!("  pop rax");
                 println!("  mov [rax], rdi"); // store value from rdi into the address in rax
                 println!("  push rdi");
+                return;
+            }
+            NodeKind::NdAddr => {
+                self.gen_lval(node.lhs.unwrap());
+                return;
+            }
+            NodeKind::NdDeref => {
+                self.gen(node.lhs.unwrap());
+                println!("  pop rax");
+                println!("  mov rax, [rax]");
+                println!("  push rax");
                 return;
             }
             _ => {}
