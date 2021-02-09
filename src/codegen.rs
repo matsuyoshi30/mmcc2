@@ -252,7 +252,7 @@ fn align(mut n: usize, align: usize) -> usize {
     if n < align {
         return align;
     }
-    while n % align == 0 {
+    while n % align != 0 {
         n += 1;
     }
     return n;
