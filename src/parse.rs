@@ -91,13 +91,13 @@ impl Node {
 
 #[derive(Clone)]
 pub struct LVar {
-    pub ty: TypeKind,
+    pub ty: Type,
     pub name: String,
     pub offset: usize,
 }
 
 impl LVar {
-    fn new_lvar(ty: TypeKind, name: String, offset: usize) -> Self {
+    fn new_lvar(ty: Type, name: String, offset: usize) -> Self {
         Self {
             ty: ty,
             name: name,
@@ -307,12 +307,11 @@ impl<'a> Parser<'a> {
             return node;
         }
 
-        let ty = Type::consume_type(&self.tokens[self.pos].op);
+        let ty = self.consume_type();
         if ty.kind != TypeKind::TyNone {
-            self.pos += 1;
             let name = self.expect_ident();
             let offset = (self.temp_locals.len() + 1) * 8;
-            let lvar = LVar::new_lvar(ty.kind, name, offset);
+            let lvar = LVar::new_lvar(ty, name, offset);
             self.expect(";");
 
             self.temp_locals.push(lvar);
@@ -369,8 +368,7 @@ impl<'a> Parser<'a> {
 
     // function = type ident "(" (type params)* ")" "{" stmt* "}"
     fn function(&mut self) -> Function {
-        let ty = Type::consume_type(&self.tokens[self.pos].op);
-        self.pos += 1;
+        let ty = self.consume_type();
         let name = self.expect_ident();
         let mut func = Function {
             ty: ty.kind,
@@ -383,25 +381,15 @@ impl<'a> Parser<'a> {
         self.expect("(");
         if self.consume(")") {
         } else {
-            let mut ty = Type::consume_type(&self.tokens[self.pos].op);
-            self.pos += 1;
+            let mut ty = self.consume_type();
             let mut name = self.expect_ident();
-            let lvar = LVar {
-                ty: ty.kind,
-                name: name,
-                offset: (self.temp_locals.len() + 1) * 8,
-            };
+            let lvar = LVar::new_lvar(ty, name, (self.temp_locals.len() + 1) * 8);
             self.temp_locals.push(lvar);
 
             while self.consume(",") {
-                ty = Type::consume_type(&self.tokens[self.pos].op);
-                self.pos += 1;
+                ty = self.consume_type();
                 name = self.expect_ident();
-                let lvar = LVar {
-                    ty: ty.kind,
-                    name: name,
-                    offset: (self.temp_locals.len() + 1) * 8,
-                };
+                let lvar = LVar::new_lvar(ty, name, (self.temp_locals.len() + 1) * 8);
                 self.temp_locals.push(lvar);
             }
             func.paramnum = self.temp_locals.len();
@@ -447,6 +435,25 @@ impl<'a> Parser<'a> {
         }
 
         false
+    }
+
+    fn consume_type(&mut self) -> Type {
+        let mut ty = Type {
+            ..Default::default()
+        };
+        if self.consume("int") {
+            ty.kind = TypeKind::TyInt;
+        }
+
+        while self.consume("*") {
+            let ptr = Type {
+                kind: TypeKind::TyPtr,
+                ptr_to: Some(Box::new(ty)),
+            };
+            ty = ptr;
+        }
+
+        ty
     }
 
     fn expect(&mut self, op: &str) {

@@ -2,26 +2,17 @@
 pub enum TypeKind {
     TyNone,
     TyInt,
+    TyPtr,
 }
 
 impl Default for TypeKind {
     fn default() -> Self {
-        TypeKind::TyInt
+        TypeKind::TyNone
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Type {
     pub kind: TypeKind,
-}
-
-impl Type {
-    pub fn consume_type(s: &str) -> Self {
-        let mut returntype = TypeKind::TyNone;
-        if s == "int" {
-            returntype = TypeKind::TyInt;
-        }
-
-        Self { kind: returntype }
-    }
+    pub ptr_to: Option<Box<Type>>,
 }
