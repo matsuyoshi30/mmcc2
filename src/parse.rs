@@ -78,6 +78,7 @@ impl Node {
 
     fn new_node_lv(lvar: Box<LVar>) -> Self {
         Self {
+            ty: Some(Box::new(lvar.ty.clone())),
             offset: lvar.offset,
             lvar: Some(lvar),
             ..Node::new_node(NodeKind::NdLv)
@@ -166,14 +167,11 @@ impl Node {
                 return;
             }
             NodeKind::NdDeref => {
-                self.ty = Some(self.lhs.clone().unwrap().lvar.unwrap().ty.ptr_to.unwrap());
+                self.ty = Some(self.lhs.clone().unwrap().ty.unwrap().ptr_to.unwrap());
                 return;
             }
             NodeKind::NdFunc | NodeKind::NdNum => {
-                self.ty = Some(Box::new(Type {
-                    kind: TypeKind::TyInt,
-                    ..Default::default()
-                }));
+                self.ty = Some(Box::new(Type::new_int()));
                 return;
             }
             _ => {}
@@ -403,7 +401,9 @@ impl<'a> Parser<'a> {
             node = Node::new_node(NodeKind::NdBlock);
             node.blocks = vec![];
             while !self.consume("}") {
-                node.blocks.push(self.stmt());
+                let mut block = self.stmt();
+                block.check_type();
+                node.blocks.push(block);
             }
             return node;
         }
@@ -416,7 +416,9 @@ impl<'a> Parser<'a> {
             self.expect(";");
 
             self.temp_locals.push(lvar.clone());
-            return Node::new_node_lv(Box::new(lvar));
+            let mut node = Node::new_node_lv(Box::new(lvar));
+            node.check_type();
+            return node;
         }
 
         if self.consume("return") {
@@ -424,38 +426,56 @@ impl<'a> Parser<'a> {
         } else if self.consume("if") {
             node = Node::new_node(NodeKind::NdIf);
             self.expect("(");
-            node.cond = Some(Box::new(self.expr()));
+            let mut cond = self.expr();
+            cond.check_type();
+            node.cond = Some(Box::new(cond));
             self.expect(")");
-            node.then = Some(Box::new(self.stmt()));
+            let mut then = self.stmt();
+            then.check_type();
+            node.then = Some(Box::new(then));
             if self.consume("else") {
-                node.els = Some(Box::new(self.stmt()));
+                let mut els = self.stmt();
+                els.check_type();
+                node.els = Some(Box::new(els));
             }
 
             return node;
         } else if self.consume("while") {
             node = Node::new_node(NodeKind::NdWhile);
             self.expect("(");
-            node.cond = Some(Box::new(self.expr()));
+            let mut cond = self.expr();
+            cond.check_type();
+            node.cond = Some(Box::new(cond));
             self.expect(")");
-            node.then = Some(Box::new(self.stmt()));
+            let mut then = self.stmt();
+            then.check_type();
+            node.then = Some(Box::new(then));
 
             return node;
         } else if self.consume("for") {
             node = Node::new_node(NodeKind::NdFor);
             self.expect("(");
             if self.tokens[self.pos].op != ";" {
-                node.preop = Some(Box::new(self.expr()));
+                let mut preop = self.expr();
+                preop.check_type();
+                node.preop = Some(Box::new(preop));
             }
             self.expect(";");
             if self.tokens[self.pos].op != ";" {
-                node.cond = Some(Box::new(self.expr()));
+                let mut cond = self.expr();
+                cond.check_type();
+                node.cond = Some(Box::new(cond));
             }
             self.expect(";");
             if self.tokens[self.pos].op != ")" {
-                node.postop = Some(Box::new(self.expr()));
+                let mut postop = self.expr();
+                postop.check_type();
+                node.postop = Some(Box::new(postop));
             }
             self.expect(")");
-            node.then = Some(Box::new(self.stmt()));
+            let mut then = self.stmt();
+            then.check_type();
+            node.then = Some(Box::new(then));
 
             return node;
         } else {
@@ -499,7 +519,9 @@ impl<'a> Parser<'a> {
         self.expect("{");
 
         while self.tokens[self.pos].op != "}" {
-            func.body.push(self.stmt());
+            let mut node = self.stmt();
+            node.check_type();
+            func.body.push(node);
         }
 
         func.locals = self.temp_locals.clone();
@@ -542,15 +564,11 @@ impl<'a> Parser<'a> {
             ..Default::default()
         };
         if self.consume("int") {
-            ty.kind = TypeKind::TyInt;
+            ty = Type::new_int();
         }
 
         while self.consume("*") {
-            let ptr = Type {
-                kind: TypeKind::TyPtr,
-                ptr_to: Some(Box::new(ty)),
-            };
-            ty = ptr;
+            ty = ty.pointer_to();
         }
 
         ty

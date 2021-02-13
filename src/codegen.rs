@@ -6,7 +6,8 @@ pub struct Generator {
     label: u32,
 }
 
-static ARG_REGS: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+static ARG_REGS4: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
+static ARG_REGS8: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 impl Generator {
     fn new_label(&mut self) -> u32 {
@@ -108,7 +109,7 @@ impl Generator {
                 }
 
                 for n in (0..len).rev() {
-                    println!("  pop {}", ARG_REGS[n]);
+                    println!("  pop {}", ARG_REGS8[n]);
                 }
 
                 println!("  call {}", node.funcname);
@@ -120,9 +121,14 @@ impl Generator {
                 return;
             }
             NodeKind::NdLv => {
+                let size = node.ty.as_ref().unwrap().size;
                 self.gen_lval(node);
                 println!("  pop rax");
-                println!("  mov rax, [rax]"); // load value from the address in rax into rax
+                if size == 4 {
+                    println!("  movsx rax, dword ptr [rax]");
+                } else {
+                    println!("  mov rax, [rax]");
+                }
                 println!("  push rax");
                 return;
             }
@@ -132,7 +138,11 @@ impl Generator {
 
                 println!("  pop rdi");
                 println!("  pop rax");
-                println!("  mov [rax], rdi"); // store value from rdi into the address in rax
+                if node.ty.unwrap().size == 4 {
+                    println!("  mov [rax], edi");
+                } else {
+                    println!("  mov [rax], rdi");
+                }
                 println!("  push rdi");
                 return;
             }
@@ -143,7 +153,11 @@ impl Generator {
             NodeKind::NdDeref => {
                 self.gen(node.lhs.unwrap());
                 println!("  pop rax");
-                println!("  mov rax, [rax]");
+                if node.ty.unwrap().size == 4 {
+                    println!("  movsx rax, dword ptr [rax]");
+                } else {
+                    println!("  mov rax, [rax]");
+                }
                 println!("  push rax");
                 return;
             }
@@ -227,7 +241,11 @@ impl Generator {
             println!("  sub rsp, {}", align((function.locals.len() + 1) * 8, 16));
 
             for n in 0..function.paramnum {
-                println!("  mov [rbp-{}], {}", (n + 1) * 8, ARG_REGS[n]);
+                if function.locals[n].ty.size == 4 {
+                    println!("  mov [rbp-{}], {}", (n + 1) * 8, ARG_REGS4[n]);
+                } else {
+                    println!("  mov [rbp-{}], {}", (n + 1) * 8, ARG_REGS8[n]);
+                }
             }
 
             for node in function.body {
