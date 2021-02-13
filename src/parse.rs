@@ -3,7 +3,7 @@ use std::process;
 use crate::tokenize::{Token, TokenKind};
 use crate::types::{Type, TypeKind};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum NodeKind {
     NdAdd,   // +
     NdSub,   // -
@@ -34,12 +34,14 @@ impl Default for NodeKind {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Clone)]
 pub struct Node {
     pub kind: NodeKind,
+    pub ty: Option<Box<Type>>,
     pub lhs: Option<Box<Node>>,
     pub rhs: Option<Box<Node>>,
     pub val: u32,
+    pub lvar: Option<Box<LVar>>,
     pub offset: usize,
     pub cond: Option<Box<Node>>,
     pub then: Option<Box<Node>>,
@@ -74,9 +76,10 @@ impl Node {
         }
     }
 
-    fn new_node_lv(offset: usize) -> Self {
+    fn new_node_lv(lvar: Box<LVar>) -> Self {
         Self {
-            offset: offset,
+            offset: lvar.offset,
+            lvar: Some(lvar),
             ..Node::new_node(NodeKind::NdLv)
         }
     }
@@ -87,9 +90,98 @@ impl Node {
             ..Node::new_node(NodeKind::NdNum)
         }
     }
+
+    fn new_add(mut lhs: Box<Node>, mut rhs: Box<Node>) -> Self {
+        lhs.check_type();
+        rhs.check_type();
+
+        if lhs.ty.as_ref().unwrap().is_integer() && rhs.ty.as_ref().unwrap().is_integer() {
+            return Node::new_binary(NodeKind::NdAdd, lhs, rhs);
+        }
+
+        if lhs.kind == NodeKind::NdAddr {
+            rhs = Box::new(Node::new_binary(
+                NodeKind::NdMul,
+                rhs,
+                Box::new(Node::new_node_num(8)),
+            ))
+        }
+
+        return Node::new_binary(NodeKind::NdSub, lhs, rhs);
+    }
+
+    fn new_sub(mut lhs: Box<Node>, mut rhs: Box<Node>) -> Self {
+        lhs.check_type();
+        rhs.check_type();
+
+        if lhs.ty.as_ref().unwrap().is_integer() && rhs.ty.as_ref().unwrap().is_integer() {
+            return Node::new_binary(NodeKind::NdSub, lhs, rhs);
+        }
+
+        if lhs.kind == NodeKind::NdAddr {
+            rhs = Box::new(Node::new_binary(
+                NodeKind::NdMul,
+                rhs,
+                Box::new(Node::new_node_num(8)),
+            ))
+        }
+
+        return Node::new_binary(NodeKind::NdAdd, lhs, rhs);
+    }
+
+    fn check_type(&mut self) {
+        if self.ty != None {
+            return;
+        }
+
+        if let Some(n) = &mut self.lhs {
+            n.check_type();
+        }
+        if let Some(n) = &mut self.rhs {
+            n.check_type();
+        }
+
+        for n in &mut self.blocks {
+            n.check_type();
+        }
+        for n in &mut self.args {
+            n.check_type();
+        }
+
+        match self.kind {
+            NodeKind::NdAdd
+            | NodeKind::NdSub
+            | NodeKind::NdMul
+            | NodeKind::NdDiv
+            | NodeKind::NdAs => {
+                self.ty = self.lhs.clone().unwrap().ty;
+                return;
+            }
+            NodeKind::NdLv => {
+                self.ty = Some(Box::new(self.lvar.clone().unwrap().ty));
+                return;
+            }
+            NodeKind::NdAddr => {
+                self.ty = Some(Box::new(self.lhs.clone().unwrap().ty.unwrap().pointer_to()));
+                return;
+            }
+            NodeKind::NdDeref => {
+                self.ty = Some(self.lhs.clone().unwrap().lvar.unwrap().ty.ptr_to.unwrap());
+                return;
+            }
+            NodeKind::NdFunc | NodeKind::NdNum => {
+                self.ty = Some(Box::new(Type {
+                    kind: TypeKind::TyInt,
+                    ..Default::default()
+                }));
+                return;
+            }
+            _ => {}
+        }
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct LVar {
     pub ty: Type,
     pub name: String,
@@ -122,14 +214,15 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn find_lvar(&mut self, name: String) -> usize {
+    fn find_lvar(&mut self, name: String) -> LVar {
         for local in &self.temp_locals {
             if local.name == name {
-                return local.offset;
+                return local.clone();
             }
         }
 
-        0
+        eprintln!("Does not match any local variable");
+        process::exit(1);
     }
 
     fn funcargs(&mut self) -> Vec<Node> {
@@ -169,8 +262,8 @@ impl<'a> Parser<'a> {
 
                 return node;
             } else {
-                let offset = self.find_lvar(name.to_string());
-                return Node::new_node_lv(offset);
+                let lvar = self.find_lvar(name.to_string());
+                return Node::new_node_lv(Box::new(lvar));
             }
         }
 
@@ -223,9 +316,9 @@ impl<'a> Parser<'a> {
 
         loop {
             if self.consume("+") {
-                lhs = Node::new_binary(NodeKind::NdAdd, Box::new(lhs), Box::new(self.mul()));
+                lhs = Node::new_add(Box::new(lhs), Box::new(self.mul()));
             } else if self.consume("-") {
-                lhs = Node::new_binary(NodeKind::NdSub, Box::new(lhs), Box::new(self.mul()));
+                lhs = Node::new_sub(Box::new(lhs), Box::new(self.mul()));
             } else {
                 break;
             }
@@ -314,8 +407,8 @@ impl<'a> Parser<'a> {
             let lvar = LVar::new_lvar(ty, name, offset);
             self.expect(";");
 
-            self.temp_locals.push(lvar);
-            return Node::new_node_lv(offset);
+            self.temp_locals.push(lvar.clone());
+            return Node::new_node_lv(Box::new(lvar));
         }
 
         if self.consume("return") {
@@ -402,7 +495,6 @@ impl<'a> Parser<'a> {
         }
 
         func.locals = self.temp_locals.clone();
-        self.temp_locals = Vec::new();
         self.pos += 1;
 
         func

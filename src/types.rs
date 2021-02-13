@@ -11,8 +11,21 @@ impl Default for TypeKind {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub struct Type {
     pub kind: TypeKind,
     pub ptr_to: Option<Box<Type>>,
+}
+
+impl Type {
+    pub fn pointer_to(self) -> Self {
+        Type {
+            kind: TypeKind::TyPtr,
+            ptr_to: Some(Box::new(self)),
+        }
+    }
+
+    pub fn is_integer(&self) -> bool {
+        self.kind == TypeKind::TyInt
+    }
 }

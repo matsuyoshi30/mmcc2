@@ -18,7 +18,7 @@ impl Generator {
     fn gen_lval(&mut self, node: Box<Node>) {
         if node.kind == NodeKind::NdLv {
             println!("  mov rax, rbp");
-            println!("  sub rax, {}", node.offset);
+            println!("  sub rax, {}", node.lvar.unwrap().offset);
             println!("  push rax");
             return;
         }
