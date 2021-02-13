@@ -289,6 +289,14 @@ impl<'a> Parser<'a> {
         if self.consume("*") {
             return Node::new_unary(NodeKind::NdDeref, Box::new(self.unary()));
         }
+        if self.consume("sizeof") {
+            let mut node = self.unary();
+            node.check_type();
+            if node.ty.as_ref().unwrap().is_integer() {
+                return Node::new_node_num(4);
+            }
+            return Node::new_node_num(8);
+        }
 
         self.primary()
     }

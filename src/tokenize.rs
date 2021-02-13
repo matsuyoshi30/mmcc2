@@ -62,7 +62,7 @@ impl Token {
 }
 
 fn is_reserved(s: &str) -> bool {
-    let keywords = ["return", "if", "else", "while", "for"];
+    let keywords = ["return", "if", "else", "while", "for", "sizeof"];
     for keyword in &keywords {
         if &s == keyword {
             return true;
