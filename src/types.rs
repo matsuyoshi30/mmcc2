@@ -3,6 +3,7 @@ pub enum TypeKind {
     TyNone,
     TyInt,
     TyPtr,
+    TyArr,
 }
 
 impl Default for TypeKind {
@@ -16,6 +17,7 @@ pub struct Type {
     pub kind: TypeKind,
     pub ptr_to: Option<Box<Type>>,
     pub size: usize,
+    pub size_array: usize,
 }
 
 impl Type {
@@ -36,6 +38,16 @@ impl Type {
             kind: TypeKind::TyPtr,
             ptr_to: Some(Box::new(self)),
             size: 8,
+            ..Default::default()
+        }
+    }
+
+    pub fn array_of(self, n: usize) -> Self {
+        Self {
+            kind: TypeKind::TyArr,
+            size: self.size * n,
+            ptr_to: Some(Box::new(self)),
+            size_array: n,
         }
     }
 

@@ -1,9 +1,11 @@
 use std::process;
 
 use crate::parse::{Node, NodeKind, Parser};
+use crate::types::TypeKind;
 
 pub struct Generator {
     label: u32,
+    var_offsets: Vec<usize>,
 }
 
 static ARG_REGS4: [&str; 6] = ["edi", "esi", "edx", "ecx", "r8d", "r9d"];
@@ -19,7 +21,7 @@ impl Generator {
     fn gen_lval(&mut self, node: Box<Node>) {
         if node.kind == NodeKind::NdLv {
             println!("  mov rax, rbp");
-            println!("  sub rax, {}", node.lvar.unwrap().offset);
+            println!("  sub rax, {}", self.var_offsets[node.lvar.unwrap().id]);
             println!("  push rax");
             return;
         }
@@ -122,14 +124,18 @@ impl Generator {
             }
             NodeKind::NdLv => {
                 let size = node.ty.as_ref().unwrap().size;
+                let ty = node.ty.clone().unwrap().kind;
+
                 self.gen_lval(node);
-                println!("  pop rax");
-                if size == 4 {
-                    println!("  movsx rax, dword ptr [rax]");
-                } else {
-                    println!("  mov rax, [rax]");
+                if ty != TypeKind::TyArr {
+                    println!("  pop rax");
+                    if size == 4 {
+                        println!("  movsxd rax, dword ptr [rax]");
+                    } else {
+                        println!("  mov rax, [rax]");
+                    }
+                    println!("  push rax");
                 }
-                println!("  push rax");
                 return;
             }
             NodeKind::NdAs => {
@@ -154,7 +160,7 @@ impl Generator {
                 self.gen(node.lhs.unwrap());
                 println!("  pop rax");
                 if node.ty.unwrap().size == 4 {
-                    println!("  movsx rax, dword ptr [rax]");
+                    println!("  movsxd rax, dword ptr [rax]");
                 } else {
                     println!("  mov rax, [rax]");
                 }
@@ -235,16 +241,23 @@ impl Generator {
             println!(".global {}", function.name);
             println!("{}:", function.name);
 
+            self.var_offsets = vec![0; function.locals.len()];
+            let mut stack_size = 0;
+            for i in (0..function.locals.len()).rev() {
+                stack_size += function.locals[i].ty.size;
+                self.var_offsets[i] = stack_size;
+            }
+
             // prologue
             println!("  push rbp");
             println!("  mov rbp, rsp");
-            println!("  sub rsp, {}", align((function.locals.len() + 1) * 8, 16));
+            println!("  sub rsp, {}", align(stack_size, 16));
 
             for n in 0..function.paramnum {
                 if function.locals[n].ty.size == 4 {
-                    println!("  mov [rbp-{}], {}", (n + 1) * 8, ARG_REGS4[n]);
+                    println!("  mov [rbp-{}], {}", self.var_offsets[n], ARG_REGS4[n]);
                 } else {
-                    println!("  mov [rbp-{}], {}", (n + 1) * 8, ARG_REGS8[n]);
+                    println!("  mov [rbp-{}], {}", self.var_offsets[n], ARG_REGS8[n]);
                 }
             }
 
@@ -262,7 +275,10 @@ impl Generator {
     }
 
     pub fn new() -> Self {
-        Self { label: 0 }
+        Self {
+            label: 0,
+            var_offsets: vec![],
+        }
     }
 }
 

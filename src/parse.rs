@@ -42,7 +42,6 @@ pub struct Node {
     pub rhs: Option<Box<Node>>,
     pub val: u32,
     pub lvar: Option<Box<LVar>>,
-    pub offset: usize,
     pub cond: Option<Box<Node>>,
     pub then: Option<Box<Node>>,
     pub els: Option<Box<Node>>,
@@ -79,7 +78,6 @@ impl Node {
     fn new_node_lv(lvar: Box<LVar>) -> Self {
         Self {
             ty: Some(Box::new(lvar.ty.clone())),
-            offset: lvar.offset,
             lvar: Some(lvar),
             ..Node::new_node(NodeKind::NdLv)
         }
@@ -100,15 +98,20 @@ impl Node {
             return Node::new_binary(NodeKind::NdAdd, lhs, rhs);
         }
 
-        if lhs.kind == NodeKind::NdAddr {
+        if lhs.kind == NodeKind::NdAddr
+            || lhs.ty.as_ref().unwrap().kind == TypeKind::TyArr
+            || lhs.ty.as_ref().unwrap().kind == TypeKind::TyPtr
+        {
+            let size = lhs.clone().ty.unwrap().ptr_to.unwrap().size;
+
             rhs = Box::new(Node::new_binary(
                 NodeKind::NdMul,
                 rhs,
-                Box::new(Node::new_node_num(8)),
+                Box::new(Node::new_node_num(size as u32)),
             ))
         }
 
-        return Node::new_binary(NodeKind::NdSub, lhs, rhs);
+        return Node::new_binary(NodeKind::NdAdd, lhs, rhs);
     }
 
     fn new_sub(mut lhs: Box<Node>, mut rhs: Box<Node>) -> Self {
@@ -119,15 +122,20 @@ impl Node {
             return Node::new_binary(NodeKind::NdSub, lhs, rhs);
         }
 
-        if lhs.kind == NodeKind::NdAddr {
+        if lhs.kind == NodeKind::NdAddr
+            || lhs.ty.as_ref().unwrap().kind == TypeKind::TyArr
+            || lhs.ty.as_ref().unwrap().kind == TypeKind::TyPtr
+        {
+            let size = lhs.clone().ty.unwrap().ptr_to.unwrap().size;
+
             rhs = Box::new(Node::new_binary(
                 NodeKind::NdMul,
                 rhs,
-                Box::new(Node::new_node_num(8)),
+                Box::new(Node::new_node_num(size as u32)),
             ))
         }
 
-        return Node::new_binary(NodeKind::NdAdd, lhs, rhs);
+        return Node::new_binary(NodeKind::NdSub, lhs, rhs);
     }
 
     fn check_type(&mut self) {
@@ -163,7 +171,14 @@ impl Node {
                 return;
             }
             NodeKind::NdAddr => {
-                self.ty = Some(Box::new(self.lhs.clone().unwrap().ty.unwrap().pointer_to()));
+                if self.lhs.clone().unwrap().ty.unwrap().kind == TypeKind::TyArr {
+                    self.ty = Some(Box::new(
+                        Box::new(self.lhs.clone().unwrap().ty.unwrap().ptr_to.unwrap())
+                            .pointer_to(),
+                    ));
+                } else {
+                    self.ty = Some(Box::new(self.lhs.clone().unwrap().ty.unwrap().pointer_to()));
+                }
                 return;
             }
             NodeKind::NdDeref => {
@@ -181,17 +196,17 @@ impl Node {
 
 #[derive(Clone, PartialEq)]
 pub struct LVar {
+    pub id: usize,
     pub ty: Type,
     pub name: String,
-    pub offset: usize,
 }
 
 impl LVar {
-    fn new_lvar(ty: Type, name: String, offset: usize) -> Self {
+    fn new_lvar(id: usize, ty: Type, name: String) -> Self {
         Self {
+            id: id,
             ty: ty,
             name: name,
-            offset: offset,
         }
     }
 }
@@ -387,12 +402,27 @@ impl<'a> Parser<'a> {
         return self.assign();
     }
 
+    // declaration = basetype ident ("[" num "]")?
+    fn declaration(&mut self) -> Node {
+        let base = self.basetype();
+        let name = self.expect_ident();
+        let ty = self.read_type_suffix(base);
+
+        let lvar = LVar::new_lvar(self.temp_locals.len(), ty, name);
+
+        self.temp_locals.push(lvar.clone());
+        let mut node = Node::new_node_lv(Box::new(lvar));
+        node.check_type();
+
+        return node;
+    }
+
     // stmt = "return" expr ";"
-    //        | type ident ";"
     //        | "{" stmt* "}"
     //        | "if" "(" cond ")" stmt ( "else" stmt )?
     //        | "while" "(" cond ")" stmt
     //        | "for" "(" expr? ";" expr? ";" expr? ")" stmt
+    //        | declaration ";"
     //        | expr ";"
     fn stmt(&mut self) -> Node {
         let mut node;
@@ -405,19 +435,6 @@ impl<'a> Parser<'a> {
                 block.check_type();
                 node.blocks.push(block);
             }
-            return node;
-        }
-
-        let ty = self.consume_type();
-        if ty.kind != TypeKind::TyNone {
-            let name = self.expect_ident();
-            let offset = (self.temp_locals.len() + 1) * 8;
-            let lvar = LVar::new_lvar(ty, name, offset);
-            self.expect(";");
-
-            self.temp_locals.push(lvar.clone());
-            let mut node = Node::new_node_lv(Box::new(lvar));
-            node.check_type();
             return node;
         }
 
@@ -478,6 +495,9 @@ impl<'a> Parser<'a> {
             node.then = Some(Box::new(then));
 
             return node;
+        } else if self.tokens[self.pos].op == "int" {
+            node = self.declaration();
+            node.check_type();
         } else {
             node = self.expr();
         }
@@ -489,7 +509,7 @@ impl<'a> Parser<'a> {
 
     // function = type ident "(" (type params)* ")" "{" stmt* "}"
     fn function(&mut self) -> Function {
-        let ty = self.consume_type();
+        let ty = self.basetype();
         let name = self.expect_ident();
         let mut func = Function {
             ty: ty.kind,
@@ -502,15 +522,17 @@ impl<'a> Parser<'a> {
         self.expect("(");
         if self.consume(")") {
         } else {
-            let mut ty = self.consume_type();
+            let mut ty = self.basetype();
             let mut name = self.expect_ident();
-            let lvar = LVar::new_lvar(ty, name, (self.temp_locals.len() + 1) * 8);
+
+            let lvar = LVar::new_lvar(self.temp_locals.len(), ty, name);
             self.temp_locals.push(lvar);
 
             while self.consume(",") {
-                ty = self.consume_type();
+                ty = self.basetype();
                 name = self.expect_ident();
-                let lvar = LVar::new_lvar(ty, name, (self.temp_locals.len() + 1) * 8);
+
+                let lvar = LVar::new_lvar(self.temp_locals.len(), ty, name);
                 self.temp_locals.push(lvar);
             }
             func.paramnum = self.temp_locals.len();
@@ -525,6 +547,7 @@ impl<'a> Parser<'a> {
         }
 
         func.locals = self.temp_locals.clone();
+
         self.pos += 1;
 
         func
@@ -559,7 +582,7 @@ impl<'a> Parser<'a> {
         false
     }
 
-    fn consume_type(&mut self) -> Type {
+    fn basetype(&mut self) -> Type {
         let mut ty = Type {
             ..Default::default()
         };
@@ -572,6 +595,17 @@ impl<'a> Parser<'a> {
         }
 
         ty
+    }
+
+    fn read_type_suffix(&mut self, base: Type) -> Type {
+        if !self.consume("[") {
+            return base;
+        }
+        let n = self.tokens[self.pos].val;
+        self.pos += 1;
+        self.expect("]");
+
+        return base.array_of(n as usize);
     }
 
     fn expect(&mut self, op: &str) {
