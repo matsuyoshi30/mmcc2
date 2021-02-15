@@ -253,7 +253,7 @@ impl<'a> Parser<'a> {
         args
     }
 
-    // primary = '(' expr ')' | ident ( "(" (args)* ")" )? | num
+    // primary = '(' expr ')' | ident (("(" (args)* ")") | ("[" expr "]"))? | num
     fn primary(&mut self) -> Node {
         if self.consume("(") {
             let node = self.expr();
@@ -274,6 +274,16 @@ impl<'a> Parser<'a> {
                 };
 
                 return node;
+            } else if self.consume("[") {
+                let lvar = self.find_lvar(name.to_string());
+                let node = Node::new_node_lv(Box::new(lvar));
+                let expr = self.expr();
+                self.expect("]");
+
+                return Node::new_unary(
+                    NodeKind::NdDeref,
+                    Box::new(Node::new_add(Box::new(node), Box::new(expr))),
+                );
             } else {
                 let lvar = self.find_lvar(name.to_string());
                 return Node::new_node_lv(Box::new(lvar));

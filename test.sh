@@ -89,8 +89,12 @@ assert 4 'int main() { int *y; return sizeof(*y); }'
 assert 3 'int main() { int x[2]; int *y; y=&x; *y=3; return *x; }'
 assert 3 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *x; }'
 assert 4 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+1); }'
+assert 5 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+2); }'
 assert 1 'int main() { int a[1]; *a=1; int *p; p=&a; return *p; }'
 assert 3 'int main() { int a[2]; *a=1; *(a+1)=2; return *a+*(a+1); }'
 assert 3 'int main() { int a[2]; *a=1; *(a+1)=2; int *p; p=&a; return *p+*(p+1); }'
+assert 4 'int main() { int x[2]; x[0]=3; x[1]=4; return x[1]; }'
+assert 5 'int main() { int x[3]; x[0]=3; x[2]=5; return x[2]; }'
+assert 3 'int main() { int a[2]; a[0]=1; a[1]=2; int *p; p=&a; return a[0]+*(p+1); }'
 
 echo OK
