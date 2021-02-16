@@ -315,10 +315,7 @@ impl<'a> Parser<'a> {
         if self.consume("sizeof") {
             let mut node = self.unary();
             node.check_type();
-            if node.ty.as_ref().unwrap().is_integer() {
-                return Node::new_node_num(4);
-            }
-            return Node::new_node_num(8);
+            return Node::new_node_num(node.ty.as_ref().unwrap().size as u32);
         }
 
         self.primary()
