@@ -158,13 +158,15 @@ impl Generator {
             }
             NodeKind::NdDeref => {
                 self.gen(node.lhs.unwrap());
-                println!("  pop rax");
-                if node.ty.unwrap().size == 4 {
-                    println!("  movsxd rax, dword ptr [rax]");
-                } else {
-                    println!("  mov rax, [rax]");
+                if node.ty.clone().unwrap().kind != TypeKind::TyArr {
+                    println!("  pop rax");
+                    if node.ty.unwrap().size == 4 {
+                        println!("  movsxd rax, dword ptr [rax]");
+                    } else {
+                        println!("  mov rax, [rax]");
+                    }
+                    println!("  push rax");
                 }
-                println!("  push rax");
                 return;
             }
             _ => {}
@@ -244,6 +246,7 @@ impl Generator {
             self.var_offsets = vec![0; function.locals.len()];
             let mut stack_size = 0;
             for i in (0..function.locals.len()).rev() {
+                println!("# ----- {}", function.locals[i].name);
                 stack_size += function.locals[i].ty.size;
                 self.var_offsets[i] = stack_size;
             }

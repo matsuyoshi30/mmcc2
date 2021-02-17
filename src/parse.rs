@@ -253,7 +253,7 @@ impl<'a> Parser<'a> {
         args
     }
 
-    // primary = '(' expr ')' | ident (("(" (args)* ")") | ("[" expr "]"))? | num
+    // primary = '(' expr ')' | ident ("(" (args)* ")") | num
     fn primary(&mut self) -> Node {
         if self.consume("(") {
             let node = self.expr();
@@ -274,16 +274,6 @@ impl<'a> Parser<'a> {
                 };
 
                 return node;
-            } else if self.consume("[") {
-                let lvar = self.find_lvar(name.to_string());
-                let node = Node::new_node_lv(Box::new(lvar));
-                let expr = self.expr();
-                self.expect("]");
-
-                return Node::new_unary(
-                    NodeKind::NdDeref,
-                    Box::new(Node::new_add(Box::new(node), Box::new(expr))),
-                );
             } else {
                 let lvar = self.find_lvar(name.to_string());
                 return Node::new_node_lv(Box::new(lvar));
@@ -294,7 +284,23 @@ impl<'a> Parser<'a> {
         Node::new_node_num(self.tokens[self.pos - 1].val)
     }
 
-    // unary = ( '+' | '-' )? primary | ('&' | '*') unary
+    // postfix = primary ("[" expr "]")*
+    fn postfix(&mut self) -> Node {
+        let mut node = self.primary();
+
+        while self.consume("[") {
+            let idx = self.expr();
+            self.expect("]");
+            node = Node::new_unary(
+                NodeKind::NdDeref,
+                Box::new(Node::new_add(Box::new(node), Box::new(idx))),
+            );
+        }
+
+        node
+    }
+
+    // unary = ( '+' | '-' )? primary | ('&' | '*'| "sizeof") unary | postfix
     fn unary(&mut self) -> Node {
         if self.consume("+") {
             return self.unary();
@@ -318,7 +324,7 @@ impl<'a> Parser<'a> {
             return Node::new_node_num(node.ty.as_ref().unwrap().size as u32);
         }
 
-        self.primary()
+        self.postfix()
     }
 
     // mul = unary ( '*' unary | '/' unary )*
@@ -413,7 +419,7 @@ impl<'a> Parser<'a> {
     fn declaration(&mut self) -> Node {
         let base = self.basetype();
         let name = self.expect_ident();
-        let ty = self.read_type_suffix(base);
+        let ty = self.type_suffix(base);
 
         let lvar = LVar::new_lvar(self.temp_locals.len(), ty, name);
 
@@ -604,13 +610,14 @@ impl<'a> Parser<'a> {
         ty
     }
 
-    fn read_type_suffix(&mut self, base: Type) -> Type {
+    fn type_suffix(&mut self, mut base: Type) -> Type {
         if !self.consume("[") {
             return base;
         }
         let n = self.tokens[self.pos].val;
         self.pos += 1;
         self.expect("]");
+        base = self.type_suffix(base);
 
         return base.array_of(n as usize);
     }
